@@ -216,7 +216,7 @@ export default function Resources() {
           <Field label="Role">
             <select className="field-input" value={editingResource.role ?? ''}
               onChange={e => {
-                const role = e.target.value as any
+                const role = e.target.value as import('../types').RoleKey
                 setEditingResource({ ...editingResource, role, hourlyRate: ROLE_RATES[role] })
               }}>
               <option value="">Select role…</option>
