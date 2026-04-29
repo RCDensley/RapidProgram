@@ -1,0 +1,20 @@
+{
+  "name": "pm-tracking-api",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc --noEmitOnError false",
+    "watch": "tsc -w",
+    "prestart": "npm run build",
+    "start": "func start",
+    "start:clean": "npm run build && func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "@azure/storage-blob": "^12.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.3"
+  }
+}
