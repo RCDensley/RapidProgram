@@ -122,7 +122,7 @@ export function getResourceSOWs(resourceId: string, data: AppData): SOW[] {
  */
 export function workingWeeksBetween(start: string, end: string): number {
   const days = dayjs(end).diff(dayjs(start), 'day') + 1
-  return (days * 5) / 7
+  return days / 7
 }
 
 /**
