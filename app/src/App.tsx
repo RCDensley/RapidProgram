@@ -8,9 +8,12 @@ import ProjectPlan from './views/ProjectPlan'
 import Resources from './views/Resources'
 import Timesheets from './views/Timesheets'
 import Settings from './views/Settings'
+import Tasks from './views/Tasks'
+import RAID from './views/RAID'
+import Assistant from './views/Assistant'
 import {
   LayoutDashboard, CalendarDays, Users, Upload, Settings2, Loader2,
-  Building2, AlertTriangle
+  Building2, AlertTriangle, CheckSquare, ShieldAlert, Bot,
 } from 'lucide-react'
 
 // ─── App Context ──────────────────────────────────────────────────────────────
@@ -33,11 +36,14 @@ export function useApp(): AppContextType {
 
 // ─── Nav items ────────────────────────────────────────────────────────────────
 const NAV = [
-  { to: '/',          label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/plan',      label: 'Project Plan',  icon: CalendarDays },
-  { to: '/resources', label: 'Resources',     icon: Users },
-  { to: '/timesheets',label: 'Timesheets',    icon: Upload },
-  { to: '/settings',  label: 'Settings',      icon: Settings2 },
+  { to: '/',           label: 'Dashboard',    icon: LayoutDashboard },
+  { to: '/plan',       label: 'Project Plan', icon: CalendarDays },
+  { to: '/resources',  label: 'Resources',    icon: Users },
+  { to: '/tasks',      label: 'Tasks',        icon: CheckSquare },
+  { to: '/raid',       label: 'RAID Log',     icon: ShieldAlert },
+  { to: '/timesheets', label: 'Timesheets',   icon: Upload },
+  { to: '/assistant',  label: 'Assistant',    icon: Bot },
+  { to: '/settings',   label: 'Settings',     icon: Settings2 },
 ]
 
 function Sidebar() {
@@ -135,7 +141,10 @@ export default function App() {
               <Route path="/"           element={<Dashboard />} />
               <Route path="/plan"       element={<ProjectPlan />} />
               <Route path="/resources"  element={<Resources />} />
+              <Route path="/tasks"      element={<Tasks />} />
+              <Route path="/raid"       element={<RAID />} />
               <Route path="/timesheets" element={<Timesheets />} />
+              <Route path="/assistant"  element={<Assistant />} />
               <Route path="/settings"   element={<Settings />} />
             </Routes>
           </main>

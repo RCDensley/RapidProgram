@@ -210,5 +210,16 @@ export const DEFAULT_DATA: AppData = {
     },
   ],
 
+  // DM-4: Tasks — empty by default
+  tasks: [],
+
+  // DM-5: RAID — empty by default
+  risks: [],
+  issues: [],
+  decisions: [],
+
+  // DM-6: File repository — empty by default
+  projectFiles: [],
+
   lastUpdated: new Date().toISOString(),
 }

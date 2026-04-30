@@ -14,8 +14,13 @@ export async function loadData(): Promise<AppData> {
     return {
       ...DEFAULT_DATA,
       ...json,
-      milestones: json.milestones ?? DEFAULT_DATA.milestones,
-      pauses:     json.pauses     ?? DEFAULT_DATA.pauses,
+      milestones:   json.milestones   ?? DEFAULT_DATA.milestones,
+      pauses:       json.pauses       ?? DEFAULT_DATA.pauses,
+      tasks:        json.tasks        ?? DEFAULT_DATA.tasks,
+      risks:        json.risks        ?? DEFAULT_DATA.risks,
+      issues:       json.issues       ?? DEFAULT_DATA.issues,
+      decisions:    json.decisions    ?? DEFAULT_DATA.decisions,
+      projectFiles: json.projectFiles ?? DEFAULT_DATA.projectFiles,
     }
   } catch {
     // Offline / no backend yet — return defaults

@@ -160,6 +160,150 @@ export interface Milestone {
   color: string   // hex
 }
 
+// ─── DM-4: Tasks ─────────────────────────────────────────────────────────────
+export type TaskBucket    = 'today' | 'this-week' | 'this-month' | 'backlog'
+export type TaskPriority  = 'low' | 'medium' | 'high'
+export type TaskEffortUnit = 'hours' | 'days' | 'weeks'
+export type RecurrenceType = 'daily' | 'weekly' | 'monthly'
+
+export interface TaskLink {
+  id: string
+  label: string
+  url: string
+}
+
+export interface TaskComment {
+  id: string
+  text: string
+  timestamp: string
+}
+
+export interface TaskRecurrence {
+  type: RecurrenceType
+  interval: number   // e.g. every 2 weeks
+}
+
+export interface Task {
+  id: string
+  title: string
+  description: string
+  sowId: string | null           // null = program-level
+  bucket: TaskBucket
+  priority: TaskPriority
+  effort: { value: number; unit: TaskEffortUnit }
+  recurrence: TaskRecurrence | null
+  links: TaskLink[]
+  comments: TaskComment[]
+  completedAt?: string
+  createdAt: string
+  order: number                  // sort order within bucket
+}
+
+export const PRIORITY_COLORS: Record<TaskPriority, string> = {
+  low:    '#34d399',
+  medium: '#fbbf24',
+  high:   '#f87171',
+}
+
+export const BUCKET_LABELS: Record<TaskBucket, string> = {
+  'today':      'Today',
+  'this-week':  'This Week',
+  'this-month': 'This Month',
+  'backlog':    'Backlog',
+}
+
+// ─── DM-5: RAID ───────────────────────────────────────────────────────────────
+export type RiskStatus   = 'Open' | 'Mitigated' | 'Closed'
+export type IssueStatus  = 'Open' | 'In Progress' | 'Resolved'
+export type IssueImpact  = 'Low' | 'Medium' | 'High' | 'Critical'
+export type RaidHistoryType = 'comment' | 'status_change' | 'score_change'
+
+export interface RaidHistoryEntry {
+  id: string
+  timestamp: string
+  type: RaidHistoryType
+  text: string
+}
+
+export interface Risk {
+  id: string
+  sowId: string | null
+  title: string
+  description: string
+  likelihood: 1 | 2 | 3 | 4 | 5   // 1=Rare … 5=Almost Certain
+  impact: 1 | 2 | 3 | 4 | 5        // 1=Negligible … 5=Critical
+  // score = likelihood × impact (always computed, never stored directly)
+  status: RiskStatus
+  mitigation?: string
+  mitigationScore?: number          // 1–25, subtracted from score for residual
+  // residualScore = max(0, score - mitigationScore) — computed
+  owner: string
+  history: RaidHistoryEntry[]
+  promotedToIssueId?: string
+  createdAt: string
+}
+
+export interface Issue {
+  id: string
+  sowId: string | null
+  title: string
+  description: string
+  impact: IssueImpact
+  status: IssueStatus
+  owner: string
+  raisedFromRiskId?: string         // set if promoted from a Risk
+  createdAt: string
+}
+
+export interface Decision {
+  id: string
+  sowId: string | null
+  title: string
+  description: string
+  rationale: string
+  decidedBy: string
+  date: string
+}
+
+export const ISSUE_IMPACT_COLORS: Record<IssueImpact, string> = {
+  Low:      '#34d399',
+  Medium:   '#fbbf24',
+  High:     '#fb923c',
+  Critical: '#f87171',
+}
+
+// Risk score helpers
+export function riskScore(r: Pick<Risk, 'likelihood' | 'impact'>): number {
+  return r.likelihood * r.impact
+}
+export function riskResidualScore(r: Risk): number {
+  return Math.max(0, riskScore(r) - (r.mitigationScore ?? 0))
+}
+export function riskScoreColor(score: number): string {
+  if (score <= 4)  return '#34d399'   // green
+  if (score <= 9)  return '#86efac'   // light green
+  if (score <= 14) return '#fbbf24'   // amber
+  if (score <= 19) return '#fb923c'   // orange
+  return '#f87171'                     // red
+}
+
+// ─── DM-6: File repository ────────────────────────────────────────────────────
+export type FileClassificationStatus = 'pending' | 'classified' | 'failed'
+
+export interface ProjectFile {
+  id: string
+  name: string                       // original filename
+  storageName: string                // blob key in pmtracking-files container
+  sowId: string | null               // AI-classified SOW association
+  folder: string                     // AI-classified path e.g. 'Purview/Meeting Notes'
+  size: number                       // bytes
+  uploadedAt: string
+  classifiedAt?: string
+  mimeType: string
+  description?: string               // AI-generated one-line summary
+  classificationStatus: FileClassificationStatus
+}
+
 // ─── App state (persisted to Azure Blob) ─────────────────────────────────────
 export interface AppData {
   sows: SOW[]
@@ -167,6 +311,11 @@ export interface AppData {
   allocations: ResourceAllocation[]
   timeEntries: TimeEntry[]
   pauses: PauseBlock[]
-  milestones: Milestone[]   // DM-3
+  milestones: Milestone[]
+  tasks: Task[]              // DM-4
+  risks: Risk[]              // DM-5
+  issues: Issue[]            // DM-5
+  decisions: Decision[]      // DM-5
+  projectFiles: ProjectFile[] // DM-6
   lastUpdated: string
 }
