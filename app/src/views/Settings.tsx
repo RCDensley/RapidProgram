@@ -412,10 +412,11 @@ export default function Settings() {
               <Field label="Status">
                 <select className="field-input" value={editingSOW.status ?? 'Active'}
                   onChange={e => setEditingSOW({ ...editingSOW, status: e.target.value as SOW['status'] })}>
-                  <option value="Active">Active</option>
-                  <option value="Awaiting Signature">Awaiting Signature</option>
-                  <option value="Complete">Complete</option>
+                  <option value="Planned">Planned</option>
                   <option value="Pipeline">Pipeline</option>
+                  <option value="Awaiting Signature">Awaiting Signature</option>
+                  <option value="Active">Active</option>
+                  <option value="Complete">Complete</option>
                 </select>
               </Field>
               <Field label="Colour">

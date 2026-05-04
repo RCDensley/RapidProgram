@@ -80,7 +80,7 @@ export interface SOW {
   color: string
   phases: Phase[]
   projectCodes: string[]
-  status: 'Active' | 'Awaiting Signature' | 'Complete' | 'Pipeline'
+  status: 'Active' | 'Awaiting Signature' | 'Complete' | 'Pipeline' | 'Planned'
 }
 
 // ─── Resource ────────────────────────────────────────────────────────────────
