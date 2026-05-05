@@ -382,16 +382,21 @@ export default function Dashboard() {
   // Program-level burndown: sum all SOWs week by week
   function buildProgramBurndown() {
     if (data.sows.length === 0) return []
-    const allSeries = data.sows.map(sow =>
-      generateBurndownSeries(sow, data)
-    )
-    // Use the longest series as the week axis
-    const longest = allSeries.reduce((a, b) => a.length >= b.length ? a : b, [])
+    const allSeries = data.sows.map(sow => generateBurndownSeries(sow, data))
+    const longest   = allSeries.reduce((a, b) => a.length >= b.length ? a : b, [])
     return longest.map((point, i) => {
-      const forecastCumulative = allSeries.reduce((sum, s) => sum + (s[i]?.forecastCumulative ?? 0), 0)
-      const actualCumulative   = allSeries.reduce((sum, s) => sum + (s[i]?.actualCumulative   ?? 0), 0)
-      const budgetCeiling      = allSeries.reduce((sum, s) => sum + (s[i]?.budgetCeiling      ?? 0), 0)
-      const bufferFloor        = allSeries.reduce((sum, s) => sum + (s[i]?.bufferFloor        ?? 0), 0)
+      // For series shorter than the longest, hold the last known cumulative value
+      // rather than falling back to 0 — prevents artificial dips when SOWs end early.
+      const forecastCumulative = allSeries.reduce((sum, s) => {
+        const idx = Math.min(i, s.length - 1)
+        return sum + (s[idx]?.forecastCumulative ?? 0)
+      }, 0)
+      const actualCumulative = allSeries.reduce((sum, s) => {
+        const idx = Math.min(i, s.length - 1)
+        return sum + (s[idx]?.actualCumulative ?? 0)
+      }, 0)
+      const budgetCeiling = allSeries.reduce((sum, s) => sum + (s[0]?.budgetCeiling ?? 0), 0)
+      const bufferFloor   = allSeries.reduce((sum, s) => sum + (s[0]?.bufferFloor   ?? 0), 0)
       return { week: point.week, date: point.date, forecastCumulative, actualCumulative, budgetCeiling, bufferFloor }
     }).filter((_, i) => i % 2 === 0)
   }

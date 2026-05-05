@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { useApp } from '../App'
-import { SOW, Phase, PhaseName, BudgetSource, PHASE_COLORS } from '../types'
+import { SOW, Phase, PhaseName, BudgetSource, MilestoneInvoice, PHASE_COLORS } from '../types'
 import { sowTotalBudget } from '../utils/calculations'
 import { v4 as uuidv4 } from 'uuid'
-import { Plus, Pencil, Trash2, Save } from 'lucide-react'
+import { Plus, Pencil, Trash2, Save, CheckCircle2, Circle } from 'lucide-react'
 import dayjs from 'dayjs'
 
 const PHASE_NAMES: PhaseName[] = ['Discover', 'Plan', 'Deliver', 'Handover']
@@ -183,6 +183,59 @@ function BudgetSourceEditor({ sow, onChange }: {
   )
 }
 
+// ─── SE-3: MilestoneInvoiceEditor ──────────────────────────────────────────────────
+function MilestoneInvoiceEditor({ sow, onChange }: {
+  sow: SOW
+  onChange: (invoices: MilestoneInvoice[]) => void
+}) {
+  const invoices = sow.milestoneInvoices ?? []
+  const total    = invoices.reduce((s, m) => s + m.amount, 0)
+  const budget   = sowTotalBudget(sow)
+
+  function add() {
+    onChange([...invoices, { id: uuidv4(), label: 'New milestone', amount: 0, date: sow.startDate, completed: false }])
+  }
+  function upd(id: string, patch: Partial<MilestoneInvoice>) {
+    onChange(invoices.map(m => m.id === id ? { ...m, ...patch } : m))
+  }
+  function del(id: string) { onChange(invoices.filter(m => m.id !== id)) }
+
+  return (
+    <div>
+      {invoices.map(m => (
+        <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: m.completed ? 'var(--emerald-bright)' : 'var(--text-3)', flexShrink: 0, padding: 0 }}
+            title={m.completed ? 'Mark incomplete' : 'Mark invoiced'} onClick={() => upd(m.id, { completed: !m.completed })}>
+            {m.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+          </button>
+          <input className="field-input" style={{ flex: 1, fontSize: 12, padding: '5px 8px', textDecoration: m.completed ? 'line-through' : 'none', color: m.completed ? 'var(--text-3)' : 'var(--text-1)' }}
+            value={m.label} placeholder="Milestone label" onChange={e => upd(m.id, { label: e.target.value })} />
+          <input className="field-input font-mono" type="date" style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
+            value={m.date} onChange={e => upd(m.id, { date: e.target.value })} />
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-3)', pointerEvents: 'none' }}>$</span>
+            <input className="field-input font-mono" type="number" style={{ width: 110, fontSize: 12, padding: '5px 8px 5px 18px' }}
+              value={m.amount || ''} placeholder="0" onChange={e => upd(m.id, { amount: Number(e.target.value) })} />
+          </div>
+          <button className="icon-btn" style={{ color: 'var(--red)', flexShrink: 0 }} onClick={() => del(m.id)}><Trash2 size={12} /></button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        <button className="btn-ghost btn-sm" onClick={add}><Plus size={11} /> Add milestone</button>
+        <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)' }}>
+          <span style={{ color: 'var(--text-3)' }}>Total: </span>
+          <strong style={{ color: budget > 0 && total > budget ? 'var(--red-bright)' : 'var(--text-1)' }}>
+            {total.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}
+          </strong>
+          {budget > 0 && total !== budget && (
+            <span style={{ color: 'var(--text-3)', marginLeft: 6 }}>/ {budget.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })} SOW</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Field wrapper ────────────────────────────────────────────────────────────
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -207,17 +260,19 @@ export default function Settings() {
     if (!s.name) return
     const isNew = !s.id
     const sow: SOW = {
-      id:           s.id ?? uuidv4(),
-      name:         s.name!,
-      shortName:    s.shortName || s.name!.split(' ').slice(0, 2).join(' '),
-      budgetSources: s.budgetSources ?? [],
-      bufferPct:    Number(s.bufferPct ?? 0.2),
-      startDate:    s.startDate ?? dayjs().format('YYYY-MM-DD'),
-      endDate:      s.endDate   ?? dayjs().add(6, 'month').format('YYYY-MM-DD'),
-      color:        s.color  ?? '#38bdf8',
-      status:       s.status ?? 'Active',
-      phases:       s.phases ?? [],
-      projectCodes: s.projectCodes ?? [],
+      id:                s.id ?? uuidv4(),
+      name:              s.name!,
+      shortName:         s.shortName || s.name!.split(' ').slice(0, 2).join(' '),
+      budgetSources:     s.budgetSources ?? [],
+      bufferPct:         Number(s.bufferPct ?? 0.2),
+      startDate:         s.startDate ?? dayjs().format('YYYY-MM-DD'),
+      endDate:           s.endDate   ?? dayjs().add(6, 'month').format('YYYY-MM-DD'),
+      color:             s.color  ?? '#38bdf8',
+      status:            s.status ?? 'Active',
+      phases:            s.phases ?? [],
+      projectCodes:      s.projectCodes ?? [],
+      pricingType:       s.pricingType ?? 'tm',
+      milestoneInvoices: s.milestoneInvoices ?? [],
     }
     const sows = isNew ? [...data.sows, sow] : data.sows.map(x => x.id === sow.id ? sow : x)
     setData({ ...data, sows })
@@ -333,6 +388,42 @@ export default function Settings() {
                   </button>
                 </div>
               ))}
+            </div>
+
+            {/* ── Pricing type toggle ── */}
+            <div style={{ paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Pricing Model
+                </div>
+                <div style={{ display: 'flex', gap: 0, borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1.5px solid var(--border)' }}>
+                  {(['tm', 'fixed'] as const).map((type, i) => (
+                    <button key={type} onClick={() => updateSOW(sow.id, { pricingType: type })}
+                      style={{
+                        padding: '5px 12px', fontSize: 11, fontWeight: 700, border: 'none', cursor: 'pointer',
+                        fontFamily: 'var(--font-main)',
+                        borderLeft: i > 0 ? '1px solid var(--border)' : 'none',
+                        background: (sow.pricingType ?? 'tm') === type ? 'rgba(56,189,248,0.15)' : 'transparent',
+                        color: (sow.pricingType ?? 'tm') === type ? 'var(--sky-bright)' : 'var(--text-3)',
+                      }}>
+                      {type === 'tm' ? 'T&M' : 'Fixed Price'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Milestone invoices — only when fixed price */}
+              {(sow.pricingType === 'fixed') && (
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10, fontWeight: 600 }}>
+                    Add one row per invoice milestone. Click the circle to mark it invoiced — the burndown steps up at that date.
+                  </div>
+                  <MilestoneInvoiceEditor
+                    sow={sow}
+                    onChange={invoices => updateSOW(sow.id, { milestoneInvoices: invoices })}
+                  />
+                </div>
+              )}
             </div>
 
             {/* ── SE-2: Budget sources ── */}

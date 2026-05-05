@@ -228,42 +228,75 @@ export function sowBufferConsumption(sow: SOW, data: AppData): number {
 
 /**
  * Generate weekly cost burndown points for a SOW.
- * Forecast uses derived allocation dates (CA-1). Budget ceiling uses sowTotalBudget (CA-4).
+ * For T&M SOWs: forecast from resource allocations, actuals from time entries.
+ * For fixed-price SOWs: forecast is a step function at milestone invoice dates;
+ * actuals step up when milestones are marked completed.
  */
 export function generateBurndownSeries(sow: SOW, data: AppData): BurndownPoint[] {
   const points: BurndownPoint[] = []
-  const budget      = sowTotalBudget(sow)          // CA-4
-  const bufferFloor = sowDeliverableBudget(sow)    // CA-4
+  const budget      = sowTotalBudget(sow)
+  const bufferFloor = sowDeliverableBudget(sow)
 
-  let forecastCumulative = 0
-  let actualCumulative   = 0
   let current = dayjs(sow.startDate).startOf('isoWeek')
   const end   = dayjs(sow.endDate).endOf('isoWeek')
+
+  // ── Fixed-price path ────────────────────────────────────────────────────
+  if (sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
+    const invoices = [...sow.milestoneInvoices].sort((a, b) => a.date.localeCompare(b.date))
+
+    while (current.isBefore(end) || current.isSame(end, 'week')) {
+      const weekEnd = current.add(6, 'day').format('YYYY-MM-DD')
+
+      // Forecast: sum of all milestone amounts with planned date <= end of this week
+      const forecastCumulative = invoices
+        .filter(m => m.date <= weekEnd)
+        .reduce((sum, m) => sum + m.amount, 0)
+
+      // Actual: sum of completed milestone amounts with planned date <= end of this week
+      const actualCumulative = invoices
+        .filter(m => m.completed && m.date <= weekEnd)
+        .reduce((sum, m) => sum + m.amount, 0)
+
+      points.push({
+        week:               current.format('MMM D'),
+        date:               current.format('YYYY-MM-DD'),
+        forecastCumulative: Math.round(forecastCumulative),
+        actualCumulative:   Math.round(actualCumulative),
+        budgetCeiling:      budget,
+        bufferFloor:        Math.round(bufferFloor),
+      })
+
+      current = current.add(1, 'week')
+    }
+    return points
+  }
+
+  // ── T&M path ────────────────────────────────────────────────────────
+  let forecastCumulative = 0
+  let actualCumulative   = 0
 
   while (current.isBefore(end) || current.isSame(end, 'week')) {
     const weekStart = current.format('YYYY-MM-DD')
     const weekEnd   = current.add(4, 'day').format('YYYY-MM-DD')
 
-    // Forecast: sum cost of allocation hours falling within this week
     const forecastThisWeek = data.allocations
       .filter(a => a.sowId === sow.id)
       .reduce((sum, alloc) => {
-        const { startDate, endDate } = derivedAllocationDates(alloc, sow)  // CA-1
+        const { startDate, endDate } = derivedAllocationDates(alloc, sow)
         const allocStart = dayjs(startDate)
         const allocEnd   = dayjs(endDate)
         if (current.isAfter(allocEnd) || current.add(4, 'day').isBefore(allocStart)) return sum
 
-        const effectiveStart   = current.isBefore(allocStart) ? allocStart : current
-        const effectiveEnd     = current.add(4, 'day').isAfter(allocEnd) ? allocEnd : current.add(4, 'day')
-        const effectiveDays    = Math.max(0, effectiveEnd.diff(effectiveStart, 'day') + 1)
-        const resource         = data.resources.find(r => r.id === alloc.resourceId)
+        const effectiveStart = current.isBefore(allocStart) ? allocStart : current
+        const effectiveEnd   = current.add(4, 'day').isAfter(allocEnd) ? allocEnd : current.add(4, 'day')
+        const effectiveDays  = Math.max(0, effectiveEnd.diff(effectiveStart, 'day') + 1)
+        const resource       = data.resources.find(r => r.id === alloc.resourceId)
         if (!resource) return sum
         return sum + (alloc.daysPerWeek / 5) * effectiveDays * 8 * resource.hourlyRate
       }, 0)
 
     forecastCumulative += forecastThisWeek
 
-    // Actuals: sum time entry costs for this week
     const actualThisWeek = data.timeEntries
       .filter(e => e.sowId === sow.id && e.billable === 'Billable')
       .filter(e => dayjs(e.date).isBetween(weekStart, weekEnd, 'day', '[]'))
@@ -272,12 +305,12 @@ export function generateBurndownSeries(sow: SOW, data: AppData): BurndownPoint[]
     actualCumulative += actualThisWeek
 
     points.push({
-      week:                 current.format('MMM D'),
-      date:                 weekStart,
-      forecastCumulative:   Math.round(forecastCumulative),
-      actualCumulative:     Math.round(actualCumulative),
-      budgetCeiling:        budget,
-      bufferFloor:          Math.round(bufferFloor),
+      week:               current.format('MMM D'),
+      date:               weekStart,
+      forecastCumulative: Math.round(forecastCumulative),
+      actualCumulative:   Math.round(actualCumulative),
+      budgetCeiling:      budget,
+      bufferFloor:        Math.round(bufferFloor),
     })
 
     current = current.add(1, 'week')

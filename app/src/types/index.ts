@@ -55,13 +55,22 @@ export interface Phase {
 }
 
 // ─── DM-2: Budget sources ─────────────────────────────────────────────────────
-// Each SOW can have one or more named funding sources.
-// The SOW total budget = sum(budgetSources.map(s => s.amount)).
 export interface BudgetSource {
   id: string
-  label: string    // e.g. 'Microsoft MCI', 'RC Co-invest', 'IntoWork Direct'
-  amount: number   // ex GST
-  color: string    // hex — used for stacked bar charts on Dashboard
+  label: string
+  amount: number
+  color: string
+}
+
+// ─── Fixed-price milestone invoices ──────────────────────────────────────────
+// For fixed-price SOWs, burndown is driven by milestone invoice events rather
+// than timesheet hours. Each milestone has a planned date and an invoice amount.
+export interface MilestoneInvoice {
+  id: string
+  label: string       // e.g. 'Phase 1 Complete — Discovery'
+  amount: number      // invoice amount ex GST
+  date: string        // planned invoice date YYYY-MM-DD
+  completed: boolean  // true once this milestone has been invoiced
 }
 
 // ─── SOW / Project ───────────────────────────────────────────────────────────
@@ -69,18 +78,20 @@ export interface SOW {
   id: string
   name: string
   shortName: string
-  // DM-2: budget is now computed from budgetSources — kept here as a fallback
-  // for any stored data that predates the migration. Use sowTotalBudget() everywhere.
   /** @deprecated Use sowTotalBudget(sow) from calculations.ts */
   budget?: number
   budgetSources: BudgetSource[]
-  bufferPct: number     // 0.2 = 20%
-  startDate: string     // YYYY-MM-DD
-  endDate: string       // YYYY-MM-DD
+  bufferPct: number
+  startDate: string
+  endDate: string
   color: string
   phases: Phase[]
   projectCodes: string[]
   status: 'Active' | 'Awaiting Signature' | 'Complete' | 'Pipeline' | 'Planned'
+  // Pricing model — defaults to 'tm' (time and materials) if not set
+  pricingType?: 'tm' | 'fixed'
+  // Only used when pricingType === 'fixed'
+  milestoneInvoices?: MilestoneInvoice[]
 }
 
 // ─── Resource ────────────────────────────────────────────────────────────────
