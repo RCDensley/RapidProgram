@@ -160,10 +160,15 @@ export function sowForecastHours(sowId: string, data: AppData): number {
 
 /**
  * Total forecast cost for a SOW.
+ * Fixed-price SOWs: forecast = full contract value (sum of all milestone invoices).
+ * T&M SOWs: forecast from resource allocations.
  */
 export function sowForecastCost(sowId: string, data: AppData): number {
   const sow = data.sows.find(s => s.id === sowId)
   if (!sow) return 0
+  if (sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
+    return sow.milestoneInvoices.reduce((sum, m) => sum + m.amount, 0)
+  }
   return data.allocations
     .filter(a => a.sowId === sowId)
     .reduce((sum, a) => sum + allocationForecastCost(a, sow, data.resources), 0)
@@ -177,7 +182,18 @@ export function sowActualHours(sowId: string, data: AppData, billableOnly = true
     .reduce((sum, e) => sum + e.hours, 0)
 }
 
+/**
+ * Total actual cost for a SOW.
+ * Fixed-price SOWs: actual = sum of completed milestone invoice amounts.
+ * T&M SOWs: actual from time entries.
+ */
 export function sowActualCost(sowId: string, data: AppData, billableOnly = true): number {
+  const sow = data.sows.find(s => s.id === sowId)
+  if (sow?.pricingType === 'fixed' && sow?.milestoneInvoices?.length) {
+    return sow.milestoneInvoices
+      .filter(m => m.completed)
+      .reduce((sum, m) => sum + m.amount, 0)
+  }
   return data.timeEntries
     .filter(e => e.sowId === sowId && (!billableOnly || e.billable === 'Billable'))
     .reduce((sum, e) => sum + (e.resolvedCost ?? 0), 0)
