@@ -125,6 +125,18 @@ app.http('writeAction', {
           return { status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(decision) }
         }
 
+        case 'refile_file': {
+          const { storageName, newFolder, newSowId } = payload
+          if (!storageName) return { status: 400, body: JSON.stringify({ error: 'Missing storageName' }) }
+          const files = appData.projectFiles ?? []
+          const target = files.find((f: any) => f.storageName === storageName || f.name === storageName || f.id === storageName)
+          if (!target) return { status: 404, body: JSON.stringify({ error: `File not found: ${storageName}` }) }
+          const updated = { ...target, folder: newFolder ?? target.folder, sowId: newSowId !== undefined ? newSowId : target.sowId }
+          appData.projectFiles = files.map((f: any) => f.id === target.id ? updated : f)
+          await writeAppData(svc, appData)
+          return { status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }
+        }
+
         default:
           return { status: 400, body: JSON.stringify({ error: `Unknown action type: ${type}` }) }
       }

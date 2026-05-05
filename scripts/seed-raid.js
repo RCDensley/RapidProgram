@@ -10,7 +10,7 @@
  *   AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;..." node scripts/seed-raid.js
  */
 
-const { BlobServiceClient } = require('@azure/storage-blob')
+const { BlobServiceClient } = require(require('path').join(__dirname, '..', 'api', 'node_modules', '@azure', 'storage-blob'))
 
 const CONN      = process.env.AZURE_STORAGE_CONNECTION_STRING || 'UseDevelopmentStorage=true'
 const CONTAINER = 'pmtracking'

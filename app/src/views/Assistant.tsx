@@ -7,6 +7,7 @@ import { ProjectFile } from '../types'
 import {
   Upload, Trash2, Bot, Send, Loader2, FileText, CheckCircle2,
   AlertTriangle, X, Image, Eye, Plus, ShieldAlert, AlertOctagon, Lightbulb, CheckSquare,
+  ChevronDown, ChevronRight, Folder, FolderOpen,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 
@@ -53,6 +54,7 @@ const ACTION_META: Record<string, { label: string; icon: any; color: string; des
   create_risk:     { label: 'Log Risk',      icon: ShieldAlert,   color: '#fbbf24', desc: (p) => `"${p.title}" - L${p.likelihood ?? '?'} x I${p.impact ?? '?'} = ${(p.likelihood ?? 0) * (p.impact ?? 0)}` },
   create_issue:    { label: 'Log Issue',     icon: AlertOctagon,  color: '#fb923c', desc: (p) => `"${p.title}" - ${p.impact ?? 'Medium'} impact` },
   create_decision: { label: 'Log Decision',  icon: Lightbulb,     color: '#a78bfa', desc: (p) => `"${p.title}" - ${p.date ?? 'today'}` },
+  refile_file:     { label: 'Refile',        icon: FolderOpen,    color: '#34d399', desc: (p) => `Move to “${p.newFolder ?? 'new folder'}”${p.newSowId ? ` · reassign to ${p.newSowId}` : ''}` },
 }
 
 // ─── Action card ──────────────────────────────────────────────────────────────
@@ -213,7 +215,174 @@ function FilePreview({ file, onClose }: { file: ProjectFile; onClose: () => void
   )
 }
 
-// ─── File row ─────────────────────────────────────────────────────────────────
+// ─── Folder tree builder ───────────────────────────────────────────────────────────────
+interface TreeNode {
+  name:     string
+  path:     string   // full dot-separated path e.g. 'Purview.Meeting Notes'
+  children: Record<string, TreeNode>
+  files:    ProjectFile[]
+}
+
+function buildTree(files: ProjectFile[]): TreeNode {
+  const root: TreeNode = { name: '', path: '', children: {}, files: [] }
+  for (const file of files) {
+    const parts = (file.folder || 'Uncategorised').split('/').map(p => p.trim()).filter(Boolean)
+    let node = root
+    let pathSoFar = ''
+    for (const part of parts) {
+      pathSoFar = pathSoFar ? `${pathSoFar}/${part}` : part
+      if (!node.children[part]) {
+        node.children[part] = { name: part, path: pathSoFar, children: {}, files: [] }
+      }
+      node = node.children[part]
+    }
+    node.files.push(file)
+  }
+  return root
+}
+
+// ─── File leaf (inside a folder) ───────────────────────────────────────────────────────────────
+function FileLeaf({ file, depth, onDelete, onPreview }: {
+  file: ProjectFile; depth: number
+  onDelete: () => void; onPreview: () => void
+}) {
+  const imgUrl      = `/api/files/${encodeURIComponent(file.storageName)}/content`
+  const previewable = canPreview(file)
+
+  return (
+    <div
+      onClick={previewable ? onPreview : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '5px 10px 5px 0',
+        paddingLeft: `${10 + depth * 16}px`,
+        cursor: previewable ? 'pointer' : 'default',
+        borderBottom: '1px solid var(--border)',
+      }}
+      onMouseEnter={e => previewable && (e.currentTarget.style.background = 'rgba(56,189,248,0.04)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >
+      {/* Icon / thumbnail */}
+      {isImage(file) ? (
+        <div style={{ width: 18, height: 18, borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+          <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        </div>
+      ) : (
+        <FileText size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+      )}
+
+      {/* Filename */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 600,
+          color: previewable ? 'var(--sky-bright)' : 'var(--text-1)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {file.name}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+          {(file.size / 1024).toFixed(0)} KB
+        </div>
+      </div>
+
+      {previewable && <Eye size={9} style={{ color: 'var(--text-3)', flexShrink: 0 }} />}
+
+      <button
+        className="icon-btn"
+        style={{ color: 'var(--text-3)', flexShrink: 0, opacity: 0.5 }}
+        onClick={e => { e.stopPropagation(); onDelete() }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--red)' }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-3)' }}
+      >
+        <Trash2 size={10} />
+      </button>
+    </div>
+  )
+}
+
+// ─── Folder node (recursive, collapsible) ───────────────────────────────────────────────────────────────
+function FolderNode({ node, depth, collapsed, toggleCollapse, onDelete, onPreview }: {
+  node: TreeNode; depth: number
+  collapsed: Set<string>; toggleCollapse: (path: string) => void
+  onDelete: (storageName: string) => void; onPreview: (file: ProjectFile) => void
+}) {
+  const isOpen      = !collapsed.has(node.path)
+  const hasContent  = Object.keys(node.children).length > 0 || node.files.length > 0
+  const totalFiles  = countFiles(node)
+  const indent      = depth * 16
+
+  return (
+    <div>
+      {/* Folder header row */}
+      <div
+        onClick={() => toggleCollapse(node.path)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: `6px 10px 6px ${10 + indent}px`,
+          cursor: 'pointer', borderBottom: '1px solid var(--border)',
+          background: 'transparent',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(148,163,184,0.06)')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      >
+        {/* Toggle chevron */}
+        {isOpen
+          ? <ChevronDown  size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+          : <ChevronRight size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+        }
+        {/* Folder icon */}
+        {isOpen
+          ? <FolderOpen size={13} style={{ color: '#fbbf24', flexShrink: 0 }} />
+          : <Folder     size={13} style={{ color: '#fbbf24', flexShrink: 0 }} />
+        }
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {node.name}
+        </span>
+        <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{totalFiles}</span>
+      </div>
+
+      {/* Children (sub-folders and files) */}
+      {isOpen && (
+        <div>
+          {Object.values(node.children)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(child => (
+              <FolderNode
+                key={child.path}
+                node={child}
+                depth={depth + 1}
+                collapsed={collapsed}
+                toggleCollapse={toggleCollapse}
+                onDelete={onDelete}
+                onPreview={onPreview}
+              />
+            ))
+          }
+          {node.files
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(file => (
+              <FileLeaf
+                key={file.id}
+                file={file}
+                depth={depth + 1}
+                onDelete={() => onDelete(file.storageName)}
+                onPreview={() => onPreview(file)}
+              />
+            ))
+          }
+        </div>
+      )}
+    </div>
+  )
+}
+
+function countFiles(node: TreeNode): number {
+  const own = node.files.length
+  const nested = Object.values(node.children).reduce((s, c) => s + countFiles(c), 0)
+  return own + nested
+}
+
+// ─── File row (kept for autocomplete — not used in tree) ────────────────────────────────────────────
 function FileRow({ file, onDelete, onPreview }: { file: ProjectFile; onDelete: () => void; onPreview: () => void }) {
   const imgUrl     = `/api/files/${encodeURIComponent(file.storageName)}/content`
   const previewable = canPreview(file)
@@ -299,7 +468,15 @@ function Message({ msg, sows }: { msg: ChatMessage; sows: any[] }) {
                     return (
                       <ActionCard
                         actionType={actionType} payload={payload} sows={sows}
-                        onConfirm={() => {}}
+                        onConfirm={() => {
+                          // Reload app data so refile changes reflect in the folder tree immediately
+                          if (actionType === 'refile_file') {
+                            fetch('/api/data').then(r => r.json()).then(d => {
+                              // Trigger a data refresh by dispatching a storage event the App listens to
+                              window.dispatchEvent(new Event('pmtracking:reload'))
+                            }).catch(() => {})
+                          }
+                        }}
                         onDismiss={() => setDismissed(prev => new Set([...prev, key]))}
                       />
                     )
@@ -332,6 +509,18 @@ export default function Assistant() {
   const [showAutocomplete, setShowAutocomplete] = useState(false)
   const [acQuery,          setAcQuery]          = useState('')
   const [acIndex,          setAcIndex]          = useState(0)
+  const [collapsed,        setCollapsed]        = useState<Set<string>>(new Set())
+
+  function toggleCollapse(path: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      next.has(path) ? next.delete(path) : next.add(path)
+      return next
+    })
+  }
+
+  // Build folder tree from files
+  const fileTree = buildTree(data.projectFiles)
 
   const chatEndRef   = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -458,11 +647,34 @@ export default function Assistant() {
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {data.projectFiles.length === 0 && <div style={{ padding: 16, fontSize: 12, color: 'var(--text-3)', textAlign: 'center', fontWeight: 600 }}>No files yet. Upload documents, meeting notes, or transcripts.</div>}
-          {data.projectFiles.map(f => <FileRow key={f.id} file={f} onDelete={() => deleteFile(f.storageName)} onPreview={() => setPreviewFile(f)} />)}
+          {Object.values(fileTree.children)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(node => (
+              <FolderNode
+                key={node.path}
+                node={node}
+                depth={0}
+                collapsed={collapsed}
+                toggleCollapse={toggleCollapse}
+                onDelete={storageName => deleteFile(storageName)}
+                onPreview={file => setPreviewFile(file)}
+              />
+            ))
+          }
+          {/* Root-level files (no folder assigned) */}
+          {fileTree.files.sort((a, b) => a.name.localeCompare(b.name)).map(f => (
+            <FileLeaf
+              key={f.id}
+              file={f}
+              depth={0}
+              onDelete={() => deleteFile(f.storageName)}
+              onPreview={() => setPreviewFile(f)}
+            />
+          ))}
         </div>
 
         <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, fontWeight: 600 }}>
-          Type / in chat to reference a file. Click a file to preview it. PDF, DOCX, XLSX, images, and text files all supported.
+          Type / in chat to reference a file. Click a file to preview it. Click a folder to collapse or expand it.
         </div>
       </div>
 

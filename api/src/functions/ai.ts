@@ -107,7 +107,7 @@ function buildSystemPrompt(appData: any): string {
     ? '  No files uploaded.'
     : files.map((f: any) => {
         const sow = sows.find((s: any) => s.id === f.sowId)
-        return `  - ${f.name} | Folder: ${f.folder} | ${sow ? sow.shortName : 'Program'}${f.description ? ` | ${f.description}` : ''}`
+        return `  - name:${f.name} | storageName:${f.storageName} | folder:${f.folder} | sowId:${f.sowId ?? 'null'} | ${sow ? sow.shortName : 'Program'}${f.description ? ` | ${f.description}` : ''}`
       }).join('\n')
 
   return `You are an intelligent project management assistant for a consulting engagement between Rapid Circle (consultant) and IntoWork Australia (client).
@@ -170,6 +170,19 @@ Issue impact: Low, Medium, High, Critical.
 Likelihood/impact: 1 (low) to 5 (high).
 
 The user will see a confirmation card and must click to confirm before the item is saved — do not worry about creating duplicates.
+
+== REFILING FILES ==
+You can also re-organise files in the file repository. When the user asks you to move, rename folder, or re-classify existing files, use this action:
+
+\`\`\`action:refile_file
+{
+  "storageName": "<exact storageName value from the FILE REPOSITORY list above>",
+  "newFolder": "New Folder/Sub-folder",
+  "newSowId": "sow-1a"
+}
+\`\`\`
+
+The storageName MUST be copied exactly from the FILE REPOSITORY list (the storageName: field). You may omit newSowId to keep the current project assignment. You may suggest multiple refile actions in one response if the user asks to reorganise several files at once.
 
 == PROGRAM OVERVIEW ==
 ${sowSummary}
