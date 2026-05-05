@@ -291,6 +291,15 @@ export function generateBurndownSeries(sow: SOW, data: AppData): BurndownPoint[]
   let forecastCumulative = 0
   let actualCumulative   = 0
 
+  // If time entries predate the SOW start, extend the series back to
+  // the earliest entry so the KPI and chart use the same date scope.
+  const sowEntries = data.timeEntries.filter(e => e.sowId === sow.id && e.billable === 'Billable')
+  const earliestEntry = sowEntries.reduce((min, e) =>
+    e.date < min ? e.date : min, sow.startDate
+  )
+  const seriesStart = dayjs(earliestEntry).startOf('isoWeek')
+  current = seriesStart.isBefore(current) ? seriesStart : current
+
   while (current.isBefore(end) || current.isSame(end, 'week')) {
     const weekStart = current.format('YYYY-MM-DD')
     const weekEnd   = current.add(4, 'day').format('YYYY-MM-DD')

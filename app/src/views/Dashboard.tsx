@@ -84,48 +84,62 @@ function BufferBar({ pct: p, label }: { pct: number; label: string }) {
 }
 
 // ─── Budget source stacked bar ────────────────────────────────────────────────
-function BudgetSourceBar({ sow, actual }: { sow: any; actual: number }) {
+function BudgetSourceBar({ sow, actual, timeEntries }: { sow: any; actual: number; timeEntries: any[] }) {
   const total = sowTotalBudget(sow)
   if (total === 0 || !sow.budgetSources?.length) return null
+
+  // Per-source actual: sum resolved cost from time entries tagged to each source
+  const drawnBySource: Record<string, number> = {}
+  for (const entry of timeEntries) {
+    if (entry.sowId !== sow.id || !entry.budgetSourceId || entry.billable !== 'Billable') continue
+    drawnBySource[entry.budgetSourceId] = (drawnBySource[entry.budgetSourceId] ?? 0) + (entry.resolvedCost ?? 0)
+  }
+
   return (
     <div>
-      {/* Stacked bar */}
-      <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 10 }}>
+      {/* Allocation bar */}
+      <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
         {sow.budgetSources.map((src: any) => (
-          <div key={src.id} style={{
-            width: `${(src.amount / total) * 100}%`,
-            background: src.color,
-          }} />
+          <div key={src.id} style={{ width: `${(src.amount / total) * 100}%`, background: src.color }} />
         ))}
       </div>
-      {/* Source list */}
-      {sow.budgetSources.map((src: any) => (
-        <div key={src.id} style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 6, fontSize: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 2, background: src.color, flexShrink: 0 }} />
-            <span style={{ color: 'var(--text-2)', fontWeight: 600 }}>{src.label}</span>
+
+      {/* Per-source rows with drawdown bar */}
+      {sow.budgetSources.map((src: any) => {
+        const drawn      = drawnBySource[src.id] ?? 0
+        const usedPct    = src.amount > 0 ? Math.min(drawn / src.amount, 1) : 0
+        const overBudget = drawn > src.amount
+        return (
+          <div key={src.id} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: src.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 600 }}>{src.label}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                {drawn > 0 && (
+                  <span style={{ color: overBudget ? 'var(--red-bright)' : 'var(--text-3)' }}>
+                    {fmt(drawn)} used
+                  </span>
+                )}
+                <span style={{ color: 'var(--text-1)', fontWeight: 700 }}>{fmt(src.amount)}</span>
+              </div>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', width: `${usedPct * 100}%`,
+                background: overBudget ? 'var(--red-bright)' : src.color,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
           </div>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-1)' }}>
-            {fmt(src.amount)}
-          </span>
-        </div>
-      ))}
-      {/* Actual drawn */}
-      <div style={{
-        marginTop: 10, paddingTop: 10,
-        borderTop: '1px solid var(--border)',
-        display: 'flex', justifyContent: 'space-between',
-        fontSize: 12,
-      }}>
-        <span style={{ color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Drawn to date
-        </span>
-        <span style={{ fontFamily: 'var(--font-mono)', color: actual > 0 ? 'var(--emerald-bright)' : 'var(--text-3)' }}>
-          {fmt(actual)}
-        </span>
+        )
+      })}
+
+      {/* Total drawn */}
+      <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+        <span style={{ color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>Drawn to date</span>
+        <span style={{ fontFamily: 'var(--font-mono)', color: actual > 0 ? 'var(--emerald-bright)' : 'var(--text-3)' }}>{fmt(actual)}</span>
       </div>
     </div>
   )
@@ -714,7 +728,7 @@ export default function Dashboard() {
                   <h3 style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <DollarSign size={12} /> Funding
                   </h3>
-                  <BudgetSourceBar sow={selectedSow} actual={sowActual} />
+                  <BudgetSourceBar sow={selectedSow} actual={sowActual} timeEntries={data.timeEntries} />
                   {/* Quick stats */}
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>
