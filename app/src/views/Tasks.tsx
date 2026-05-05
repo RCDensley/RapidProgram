@@ -497,7 +497,7 @@ export default function Tasks() {
       if (!res.ok) throw new Error(await res.text())
       const projectFile: ProjectFile = await res.json()
       // Update the global file list immediately
-      setData(prev => ({ ...prev, projectFiles: [...prev.projectFiles, projectFile] }))
+      setData({ ...data, projectFiles: [...data.projectFiles, projectFile] })
       return projectFile
     } catch (e: any) {
       alert(`Upload failed: ${e.message}`)
@@ -512,7 +512,7 @@ export default function Tasks() {
     const header = ['ID','Title','Description','Project','SOW_ID','Bucket','Priority','Status','Effort_Value','Effort_Unit','Created','Completed']
     const rows = data.tasks.map(t => {
       const sow = sows.find(s => s.id === t.sowId)
-      return [t.id, t.title, t.description, sow?.shortName ?? 'Program', t.sowId ?? '', t.bucket, t.priority, t.status ?? 'Open', t.effort.value, t.effort.unit, t.createdAt, t.completedAt ?? '']
+      return [t.id, t.title, t.description, sow?.shortName ?? 'Program', t.sowId ?? '', t.bucket, t.priority, t.status ?? 'Open', String(t.effort.value), t.effort.unit, t.createdAt, t.completedAt ?? '']
     })
     downloadCsv(`tasks-${new Date().toISOString().slice(0,10)}.csv`, [header, ...rows])
   }

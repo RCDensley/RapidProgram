@@ -401,7 +401,7 @@ export default function RAID() {
     if (tab === 'risks') {
       const rows = data.risks.map(r => {
         const sow = data.sows.find(s => s.id === r.sowId)
-        return [r.id, r.title, r.description, sow?.shortName ?? 'Program', r.sowId ?? '', r.likelihood, r.impact, r.likelihood * r.impact, r.status, r.owner, r.mitigation ?? '', r.mitigationScore ?? '', r.createdAt]
+        return [r.id, r.title, r.description, sow?.shortName ?? 'Program', r.sowId ?? '', String(r.likelihood), String(r.impact), String(r.likelihood * r.impact), r.status, r.owner, r.mitigation ?? '', String(r.mitigationScore ?? ''), r.createdAt]
       })
       downloadCsv(`risks-${date}.csv`, [['ID','Title','Description','Project','SOW_ID','Likelihood','Impact','Score','Status','Owner','Mitigation','MitigationScore','Created'], ...rows])
     } else if (tab === 'issues') {

@@ -426,7 +426,7 @@ function FileRow({ file, onDelete, onPreview }: { file: ProjectFile; onDelete: (
 }
 
 // ─── Chat message ─────────────────────────────────────────────────────────────
-function Message({ msg, sows }: { msg: ChatMessage; sows: any[] }) {
+function Message({ msg, sows, onRefileConfirm }: { msg: ChatMessage; sows: any[]; onRefileConfirm: () => void }) {
   const isUser = msg.role === 'user'
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set())
 
@@ -469,7 +469,7 @@ function Message({ msg, sows }: { msg: ChatMessage; sows: any[] }) {
                       <ActionCard
                         actionType={actionType} payload={payload} sows={sows}
                         onConfirm={() => {
-                          if (actionType === 'refile_file') reloadData()
+                          if (actionType === 'refile_file') onRefileConfirm()
                         }}
                         onDismiss={() => setDismissed(prev => new Set([...prev, key]))}
                       />
@@ -702,7 +702,7 @@ export default function Assistant() {
               </div>
             </div>
           )}
-          {messages.map(m => <Message key={m.id} msg={m} sows={data.sows} />)}
+          {messages.map(m => <Message key={m.id} msg={m} sows={data.sows} onRefileConfirm={reloadData} />)}
           <div ref={chatEndRef} />
         </div>
 
