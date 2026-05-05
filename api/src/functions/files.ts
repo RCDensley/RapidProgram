@@ -43,16 +43,23 @@ async function classifyFile(
   filename: string,
   textPreview: string,
   sows: { id: string; name: string; shortName: string }[],
+  taskHint?: string | null,
+  sowHint?: string | null,
 ): Promise<{ sowId: string | null; folder: string; description: string }> {
   try {
     const ai      = getAIProvider()
     const sowList = sows.map(s => `- ${s.id}: ${s.name}`).join('\n')
+    const context = [
+      taskHint ? `This file was attached to a task titled: "${taskHint}".` : '',
+      sowHint  ? `It was attached within the project with SOW id: ${sowHint}.` : '',
+    ].filter(Boolean).join(' ')
     const prompt  = `You are a document classifier for a consulting project management tool.
 
 Available projects (SOW IDs and names):
 ${sowList}
 
 File name: "${filename}"
+${context ? `Context: ${context}` : ''}
 File preview (first 500 chars):
 ${textPreview.slice(0, 500)}
 
@@ -126,6 +133,10 @@ app.http('uploadFile', {
       const fileBuffer   = Buffer.from(arrayBuf)
       const storageName  = `${uuidv4()}-${originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`
 
+      // Optional hints from task context
+      const taskHint = formData.get('taskHint') as string | null
+      const sowHint  = formData.get('sowHint')  as string | null
+
       const fileBlob = svc.getContainerClient(FILES_CONTAINER).getBlockBlobClient(storageName)
       await fileBlob.upload(fileBuffer, fileBuffer.length, {
         blobHTTPHeaders: { blobContentType: mimeType },
@@ -133,7 +144,7 @@ app.http('uploadFile', {
 
       const appData        = await readAppData(svc)
       const textPreview    = extractTextPreview(fileBuffer, mimeType)
-      const classification = await classifyFile(originalName, textPreview, appData.sows ?? [])
+      const classification = await classifyFile(originalName, textPreview, appData.sows ?? [], taskHint, sowHint)
 
       const projectFile = {
         id:                   uuidv4(),

@@ -172,6 +172,7 @@ export interface Milestone {
 }
 
 // ─── DM-4: Tasks ─────────────────────────────────────────────────────────────
+export type TaskStatus    = 'Open' | 'In Progress' | 'Done'
 export type TaskBucket    = 'today' | 'this-week' | 'this-month' | 'backlog'
 export type TaskPriority  = 'low' | 'medium' | 'high'
 export type TaskEffortUnit = 'hours' | 'days' | 'weeks'
@@ -201,13 +202,15 @@ export interface Task {
   sowId: string | null           // null = program-level
   bucket: TaskBucket
   priority: TaskPriority
+  status: TaskStatus             // Open / In Progress / Done
   effort: { value: number; unit: TaskEffortUnit }
   recurrence: TaskRecurrence | null
   links: TaskLink[]
   comments: TaskComment[]
+  attachments: string[]          // ProjectFile ids linked to this task
   completedAt?: string
   createdAt: string
-  order: number                  // sort order within bucket
+  order: number
 }
 
 export const PRIORITY_COLORS: Record<TaskPriority, string> = {
