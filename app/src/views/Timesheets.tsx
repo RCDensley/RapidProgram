@@ -391,6 +391,7 @@ export default function Timesheets() {
                   <th>Billable</th>
                   <th>Role</th>
                   <th>Cost</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,6 +482,17 @@ export default function Timesheets() {
                       </td>
                       <td style={{ fontSize: 11, color: 'var(--text-3)' }}>{e.workRole}</td>
                       <td className="font-mono" style={{ fontSize: 11 }}>{e.resolvedCost != null ? fmt(e.resolvedCost) : '—'}</td>
+                      <td
+                        title={e.notes || undefined}
+                        style={{
+                          fontSize: 11, color: 'var(--text-3)',
+                          maxWidth: 200, overflow: 'hidden',
+                          textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          cursor: e.notes ? 'help' : 'default',
+                        }}
+                      >
+                        {e.notes ? e.notes.slice(0, 60) + (e.notes.length > 60 ? '…' : '') : '—'}
+                      </td>
                     </tr>
                   )
                 })}
