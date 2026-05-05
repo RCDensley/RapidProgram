@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useApp } from '../App'
 import {
   Risk, Issue, Decision, RiskStatus, IssueStatus, IssueImpact,
@@ -6,13 +6,48 @@ import {
   riskScore, riskResidualScore, riskScoreColor,
 } from '../types'
 import { v4 as uuidv4 } from 'uuid'
-import { Plus, Pencil, Trash2, ArrowUpCircle, X, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, ArrowUpCircle, X, ChevronRight, Download, Upload as UploadIcon } from 'lucide-react'
 import dayjs from 'dayjs'
 
 const LIKELIHOOD_LABELS = ['', 'Rare', 'Unlikely', 'Possible', 'Likely', 'Almost Certain']
 const IMPACT_LABELS     = ['', 'Negligible', 'Minor', 'Moderate', 'Major', 'Critical']
 
-function fmt(n: number) { return `$${n.toLocaleString()}` }
+function escapeCsv(v: any): string {
+  const s = String(v ?? '')
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+}
+function downloadCsv(filename: string, rows: string[][]): void {
+  const csv  = rows.map(r => r.map(escapeCsv).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = Object.assign(document.createElement('a'), { href: url, download: filename })
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = []
+  let field = '', inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++ }
+      else if (c === '"') inQ = false
+      else field += c
+    } else if (c === '"') { inQ = true
+    } else if (c === ',') {
+      if (!rows.length) rows.push([]); rows[rows.length - 1].push(field); field = ''
+    } else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
+      if (c === '\r') i++
+      if (!rows.length) rows.push([])
+      rows[rows.length - 1].push(field); rows.push([]); field = ''
+    } else field += c
+  }
+  if (!rows.length) rows.push([])
+  rows[rows.length - 1].push(field)
+  return rows.filter(r => r.some(c => c.trim()))
+}
+
+
 
 // ─── 5×5 Risk Matrix ──────────────────────────────────────────────────────────
 function RiskMatrix({
@@ -358,6 +393,99 @@ export default function RAID() {
   const [editIssue,    setEditIssue]    = useState<Partial<Issue> | null>(null)
   const [editDecision, setEditDecision] = useState<Partial<Decision> | null>(null)
 
+  const importRef = useRef<HTMLInputElement>(null)
+
+  // ── CSV Export ───────────────────────────────────────────────────────────────
+  function exportCurrentTab() {
+    const date = new Date().toISOString().slice(0, 10)
+    if (tab === 'risks') {
+      const rows = data.risks.map(r => {
+        const sow = data.sows.find(s => s.id === r.sowId)
+        return [r.id, r.title, r.description, sow?.shortName ?? 'Program', r.sowId ?? '', r.likelihood, r.impact, r.likelihood * r.impact, r.status, r.owner, r.mitigation ?? '', r.mitigationScore ?? '', r.createdAt]
+      })
+      downloadCsv(`risks-${date}.csv`, [['ID','Title','Description','Project','SOW_ID','Likelihood','Impact','Score','Status','Owner','Mitigation','MitigationScore','Created'], ...rows])
+    } else if (tab === 'issues') {
+      const rows = data.issues.map(i => {
+        const sow = data.sows.find(s => s.id === i.sowId)
+        return [i.id, i.title, i.description, sow?.shortName ?? 'Program', i.sowId ?? '', i.impact, i.status, i.owner, i.raisedFromRiskId ?? '', i.createdAt]
+      })
+      downloadCsv(`issues-${date}.csv`, [['ID','Title','Description','Project','SOW_ID','Impact','Status','Owner','RaisedFromRisk','Created'], ...rows])
+    } else {
+      const rows = data.decisions.map(d => {
+        const sow = data.sows.find(s => s.id === d.sowId)
+        return [d.id, d.title, d.description, d.rationale, sow?.shortName ?? 'Program', d.sowId ?? '', d.decidedBy, d.date]
+      })
+      downloadCsv(`decisions-${date}.csv`, [['ID','Title','Description','Rationale','Project','SOW_ID','DecidedBy','Date'], ...rows])
+    }
+  }
+
+  // ── CSV Import ───────────────────────────────────────────────────────────────
+  function importFromCsv(file: File) {
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rows = parseCsvRows(ev.target?.result as string)
+      if (rows.length < 2) return
+      const header = rows[0].map(h => h.trim().toLowerCase())
+      const idx = (name: string) => header.indexOf(name)
+      let added = 0
+
+      if (tab === 'risks') {
+        const existing = new Set(data.risks.map(r => r.id))
+        const newRisks: Risk[] = rows.slice(1).map(row => ({
+          id:          row[idx('id')]?.trim() || uuidv4(),
+          title:       row[idx('title')]?.trim() || 'Imported risk',
+          description: row[idx('description')]?.trim() || '',
+          sowId:       row[idx('sow_id')]?.trim() || null,
+          likelihood:  (Number(row[idx('likelihood')]?.trim()) || 3) as any,
+          impact:      (Number(row[idx('impact')]?.trim()) || 3) as any,
+          status:      (row[idx('status')]?.trim() || 'Open') as RiskStatus,
+          owner:       row[idx('owner')]?.trim() || '',
+          mitigation:  row[idx('mitigation')]?.trim() || undefined,
+          mitigationScore: Number(row[idx('mitigationscore')]?.trim()) || undefined,
+          history:     [],
+          createdAt:   row[idx('created')]?.trim() || new Date().toISOString(),
+        }))
+        const toAdd = newRisks.filter(r => !existing.has(r.id))
+        added = toAdd.length
+        setData({ ...data, risks: [...data.risks, ...toAdd] })
+
+      } else if (tab === 'issues') {
+        const existing = new Set(data.issues.map(i => i.id))
+        const newIssues: Issue[] = rows.slice(1).map(row => ({
+          id:          row[idx('id')]?.trim() || uuidv4(),
+          title:       row[idx('title')]?.trim() || 'Imported issue',
+          description: row[idx('description')]?.trim() || '',
+          sowId:       row[idx('sow_id')]?.trim() || null,
+          impact:      (row[idx('impact')]?.trim() || 'Medium') as IssueImpact,
+          status:      (row[idx('status')]?.trim() || 'Open') as IssueStatus,
+          owner:       row[idx('owner')]?.trim() || '',
+          createdAt:   row[idx('created')]?.trim() || new Date().toISOString(),
+        }))
+        const toAdd = newIssues.filter(i => !existing.has(i.id))
+        added = toAdd.length
+        setData({ ...data, issues: [...data.issues, ...toAdd] })
+
+      } else {
+        const existing = new Set(data.decisions.map(d => d.id))
+        const newDecisions: Decision[] = rows.slice(1).map(row => ({
+          id:          row[idx('id')]?.trim() || uuidv4(),
+          title:       row[idx('title')]?.trim() || 'Imported decision',
+          description: row[idx('description')]?.trim() || '',
+          rationale:   row[idx('rationale')]?.trim() || '',
+          sowId:       row[idx('sow_id')]?.trim() || null,
+          decidedBy:   row[idx('decidedby')]?.trim() || '',
+          date:        row[idx('date')]?.trim() || new Date().toISOString().slice(0, 10),
+        }))
+        const toAdd = newDecisions.filter(d => !existing.has(d.id))
+        added = toAdd.length
+        setData({ ...data, decisions: [...data.decisions, ...toAdd] })
+      }
+
+      alert(`Imported ${added} new ${tab} (duplicates skipped by ID).`)
+    }
+    reader.readAsText(file)
+  }
+
   // ── Risk CRUD ────────────────────────────────────────────────────────────────
   function saveRisk(partial: Partial<Risk>) {
     if (!partial.title || !partial.likelihood || !partial.impact) return
@@ -493,6 +621,14 @@ export default function RAID() {
           <p className="view-sub">Risks · Issues · Decisions</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost btn-sm" onClick={exportCurrentTab} title={`Export ${tab} as CSV`}>
+            <Download size={13} /> Export CSV
+          </button>
+          <button className="btn-ghost btn-sm" onClick={() => importRef.current?.click()} title={`Import ${tab} from CSV`}>
+            <UploadIcon size={13} /> Import CSV
+          </button>
+          <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }}
+            onChange={e => { if (e.target.files?.[0]) { importFromCsv(e.target.files[0]); e.target.value = '' } }} />
           {tab === 'risks'     && <button className="btn-primary" onClick={() => setEditRisk({})}><Plus size={14} /> Add Risk</button>}
           {tab === 'issues'    && <button className="btn-primary" onClick={() => setEditIssue({})}><Plus size={14} /> Add Issue</button>}
           {tab === 'decisions' && <button className="btn-primary" onClick={() => setEditDecision({})}><Plus size={14} /> Add Decision</button>}

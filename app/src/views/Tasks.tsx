@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid'
 import {
   Plus, X, ChevronDown, ChevronRight, RefreshCw, Link, MessageSquare,
   CheckCircle2, Circle, Trash2, ExternalLink, Paperclip, Loader2, FileText,
+  Download, Upload as UploadIcon,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 
@@ -27,6 +28,45 @@ const STATUS_BG: Record<TaskStatus, string> = {
   'Open':        'rgba(148,163,184,0.12)',
   'In Progress': 'rgba(56,189,248,0.12)',
   'Done':        'rgba(52,211,153,0.12)',
+}
+
+// ─── CSV helpers ───────────────────────────────────────────────────────────────
+function escapeCsv(v: any): string {
+  const s = String(v ?? '')
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+}
+function downloadCsv(filename: string, rows: string[][]): void {
+  const csv  = rows.map(r => r.map(escapeCsv).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = Object.assign(document.createElement('a'), { href: url, download: filename })
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = []
+  let cur = '', field = '', inQ = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++ }
+      else if (c === '"') inQ = false
+      else field += c
+    } else if (c === '"') {
+      inQ = true
+    } else if (c === ',') {
+      cur += field; rows[rows.length - 1]?.push(field) || rows.push([field]); field = ''
+    } else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
+      if (c === '\r') i++
+      if (rows.length === 0) rows.push([])
+      rows[rows.length - 1].push(field); rows.push([]); field = ''
+    } else field += c
+  }
+  if (field || rows[rows.length - 1]?.length) {
+    if (rows.length === 0) rows.push([])
+    rows[rows.length - 1].push(field)
+  }
+  return rows.filter(r => r.some(c => c.trim()))
 }
 
 // ─── Drag state ───────────────────────────────────────────────────────────────
@@ -367,6 +407,11 @@ export default function Tasks() {
   const [filterSow,      setFilterSow]      = useState<string>('all')
   const [filterStatus,   setFilterStatus]   = useState<string>('all')
   const [hideCompleted,  setHideCompleted]  = useState(false)
+  const [collapsedBuckets, setCollapsedBuckets] = useState<Set<TaskBucket>>(new Set())
+
+  function toggleBucket(b: TaskBucket) {
+    setCollapsedBuckets(prev => { const n = new Set(prev); n.has(b) ? n.delete(b) : n.add(b); return n })
+  }
 
   const dragRef = useRef<DragInfo | null>(null)
 
@@ -460,6 +505,51 @@ export default function Tasks() {
     }
   }
 
+  const importRef = useRef<HTMLInputElement>(null)
+
+  function exportTasksCsv() {
+    const sows = data.sows
+    const header = ['ID','Title','Description','Project','SOW_ID','Bucket','Priority','Status','Effort_Value','Effort_Unit','Created','Completed']
+    const rows = data.tasks.map(t => {
+      const sow = sows.find(s => s.id === t.sowId)
+      return [t.id, t.title, t.description, sow?.shortName ?? 'Program', t.sowId ?? '', t.bucket, t.priority, t.status ?? 'Open', t.effort.value, t.effort.unit, t.createdAt, t.completedAt ?? '']
+    })
+    downloadCsv(`tasks-${new Date().toISOString().slice(0,10)}.csv`, [header, ...rows])
+  }
+
+  function importTasksCsv(file: File) {
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const rows = parseCsvRows(ev.target?.result as string)
+      if (rows.length < 2) return
+      const header = rows[0].map(h => h.trim().toLowerCase())
+      const idx = (name: string) => header.indexOf(name)
+      const newTasks: Task[] = rows.slice(1).map((row, i) => ({
+        id:          row[idx('id')]?.trim() || uuidv4(),
+        title:       row[idx('title')]?.trim() || 'Imported task',
+        description: row[idx('description')]?.trim() || '',
+        sowId:       row[idx('sow_id')]?.trim() || null,
+        bucket:      (row[idx('bucket')]?.trim() || 'backlog') as TaskBucket,
+        priority:    (row[idx('priority')]?.trim() || 'medium') as TaskPriority,
+        status:      (row[idx('status')]?.trim() || 'Open') as TaskStatus,
+        effort:      { value: Number(row[idx('effort_value')] || 1), unit: (row[idx('effort_unit')] || 'hours') as TaskEffortUnit },
+        recurrence:  null,
+        links:       [],
+        comments:    [],
+        attachments: [],
+        createdAt:   row[idx('created')]?.trim() || new Date().toISOString(),
+        completedAt: row[idx('completed')]?.trim() || undefined,
+        order:       data.tasks.length + i,
+      }))
+      const existingIds = new Set(data.tasks.map(t => t.id))
+      const toAdd = newTasks.filter(t => !existingIds.has(t.id))
+      const updated = [...data.tasks, ...toAdd]
+      setData({ ...data, tasks: updated })
+      alert(`Imported ${toAdd.length} new tasks (${newTasks.length - toAdd.length} duplicates skipped).`)
+    }
+    reader.readAsText(file)
+  }
+
   return (
     <div className="view-root" style={{ paddingRight: panelTask ? 460 : 32, transition: 'padding-right 0.2s' }}>
       <div className="view-header">
@@ -467,9 +557,18 @@ export default function Tasks() {
           <h1 className="view-title">Tasks</h1>
           <p className="view-sub">Drag between buckets and projects to reorganise</p>
         </div>
-        <button className="btn-primary" onClick={() => openNewTask('backlog', null)}>
-          <Plus size={14} /> New Task
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost btn-sm" onClick={exportTasksCsv} title="Export tasks as CSV">
+            <Download size={13} /> Export CSV
+          </button>
+          <button className="btn-ghost btn-sm" onClick={() => importRef.current?.click()} title="Import tasks from CSV">
+            <UploadIcon size={13} /> Import CSV
+          </button>
+          <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) importTasksCsv(e.target.files[0]) }} />
+          <button className="btn-primary" onClick={() => openNewTask('backlog', null)}>
+            <Plus size={14} /> New Task
+          </button>
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -501,11 +600,21 @@ export default function Tasks() {
 
       {/* Bucket headers */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 8, paddingLeft: 180 }}>
-        {BUCKETS.map(b => (
-          <div key={b} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            {BUCKET_LABELS[b]}
-          </div>
-        ))}
+        {BUCKETS.map(b => {
+          const isCollapsed = collapsedBuckets.has(b)
+          const count = data.tasks.filter(t => t.bucket === b && !t.completedAt).length
+          return (
+            <div key={b}
+              onClick={() => toggleBucket(b)}
+              style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 800, color: isCollapsed ? 'var(--text-3)' : 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.07em', cursor: 'pointer', padding: '4px 0', borderRadius: 'var(--radius-sm)', background: isCollapsed ? 'transparent' : 'rgba(148,163,184,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 0.15s', userSelect: 'none' }}
+              title={isCollapsed ? 'Click to expand' : 'Click to collapse'}
+            >
+              {isCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+              {BUCKET_LABELS[b]}
+              {count > 0 && !isCollapsed && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', background: 'var(--border)', color: 'var(--text-3)', padding: '0px 5px', borderRadius: 8 }}>{count}</span>}
+            </div>
+          )
+        })}
       </div>
 
       {/* Project rows */}
@@ -528,7 +637,7 @@ export default function Tasks() {
             {isExpanded && (
               <div style={{ display: 'flex', gap: 12, paddingLeft: 180 }}>
                 {BUCKETS.map(bucket => (
-                  <BucketColumn key={bucket} bucket={bucket} tasks={getTasksFor(bucket, row.id)} sows={data.sows} sowId={row.id}
+                  <BucketColumn key={bucket} bucket={bucket} tasks={collapsedBuckets.has(bucket) ? [] : getTasksFor(bucket, row.id)} sows={data.sows} sowId={row.id}
                     onOpenTask={t => setPanelTask(t)} onCompleteTask={onCompleteTask}
                     onDragStart={onDragStart} onDrop={onDrop} onAddTask={openNewTask} />
                 ))}
