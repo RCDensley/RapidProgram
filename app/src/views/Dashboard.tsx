@@ -157,13 +157,41 @@ function ViewToggle({ view, onChange }: { view: BurndownView; onChange: (v: Burn
   )
 }
 
-// ─── Client burndown chart (total SOW vs forecast/actual) ─────────────────────
-function ClientBurndownChart({ data: chartData }: { data: any[] }) {
+// ─── Client burndown chart ───────────────────────────────────────────────────────────────
+function ClientBurndownChart({ data: chartData, sow }: { data: any[]; sow?: any }) {
+  const isFixed    = sow?.pricingType === 'fixed'
+  const hasInvoices = isFixed && (sow?.milestoneInvoices?.length ?? 0) > 0
+  const lineType   = isFixed ? 'stepAfter' : 'monotone'
+
+  // Empty state: fixed price selected but no milestone invoices configured yet
+  if (isFixed && !hasInvoices) {
+    return (
+      <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-3)' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--text-2)' }}>
+          Fixed price — no milestone invoices configured
+        </div>
+        <div style={{ fontSize: 12 }}>Go to Settings → {sow?.shortName} → add milestone invoices to see the burndown step chart.</div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 12, fontWeight: 600 }}>
-        Forecast <span style={{ color: 'var(--violet-bright)' }}>●</span> vs
-        Actual <span style={{ color: 'var(--sky-bright)' }}>●</span> — every other week
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        {isFixed ? (
+          <>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10, background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)', letterSpacing: '0.04em' }}>
+              FIXED PRICE
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
+              Planned milestones <span style={{ color: 'var(--violet-bright)' }}>●</span> vs Invoiced <span style={{ color: 'var(--sky-bright)' }}>●</span>
+            </span>
+          </>
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>
+            Forecast <span style={{ color: 'var(--violet-bright)' }}>●</span> vs Actual <span style={{ color: 'var(--sky-bright)' }}>●</span> — every other week
+          </span>
+        )}
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
@@ -179,10 +207,12 @@ function ClientBurndownChart({ data: chartData }: { data: any[] }) {
             label={{ value: 'Budget', fill: '#f87171', fontSize: 10 }} />
           <ReferenceLine y={chartData[0]?.bufferFloor} stroke="#fb923c" strokeDasharray="4 4"
             label={{ value: 'Buffer', fill: '#fb923c', fontSize: 10 }} />
-          <Line type="monotone" dataKey="forecastCumulative" name="Forecast"
-            stroke="#a78bfa" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="actualCumulative" name="Actual"
-            stroke="#38bdf8" strokeWidth={2} dot={{ r: 3, fill: '#38bdf8' }} />
+          <Line type={lineType} dataKey="forecastCumulative"
+            name={isFixed ? 'Planned milestones' : 'Forecast'}
+            stroke="#a78bfa" strokeWidth={2} dot={isFixed ? { r: 4, fill: '#a78bfa', strokeWidth: 0 } : false} />
+          <Line type={lineType} dataKey="actualCumulative"
+            name={isFixed ? 'Invoiced' : 'Actual'}
+            stroke="#38bdf8" strokeWidth={2} dot={{ r: isFixed ? 5 : 3, fill: '#38bdf8', strokeWidth: isFixed ? 2 : 0, stroke: isFixed ? '#fff' : undefined }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -337,7 +367,7 @@ function BurndownChart({ sow, data: chartData, timeEntries, view, onViewChange }
         <ViewToggle view={view} onChange={onViewChange} />
       </div>
       {view === 'client' || !sow ? (
-        <ClientBurndownChart data={chartData} />
+        <ClientBurndownChart data={chartData} sow={sow} />
       ) : (
         <InternalBurndownChart sow={sow} baseData={chartData} timeEntries={timeEntries} />
       )}
