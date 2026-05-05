@@ -19,9 +19,10 @@ import {
 // ─── App Context ──────────────────────────────────────────────────────────────
 interface AppContextType {
   data: AppData
-  setData: (d: AppData) => void       // update state + save to API
-  updateData: (d: AppData) => void    // update state only — use during drag/live preview
+  setData: (d: AppData) => void
+  updateData: (d: AppData) => void
   save: (d: AppData) => Promise<void>
+  reloadData: () => Promise<void>
   saving: boolean
   saveError: string | null
 }
@@ -110,7 +111,12 @@ export default function App() {
     }
   }, [])
 
-  // Update state + persist — use for confirmed changes (button clicks, mouseup, form submits)
+  const reloadData = useCallback(async () => {
+    const d = await loadData()
+    setDataState(d)
+  }, [])
+
+  // Update state + persist
   const setData = useCallback((d: AppData) => {
     setDataState(d)
     save(d)
@@ -131,7 +137,7 @@ export default function App() {
   }
 
   return (
-    <AppContext.Provider value={{ data, setData, updateData, save, saving, saveError }}>
+    <AppContext.Provider value={{ data, setData, updateData, save, reloadData, saving, saveError }}>
       <BrowserRouter>
         <div className="app-shell">
           <Sidebar />

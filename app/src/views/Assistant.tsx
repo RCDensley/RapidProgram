@@ -469,13 +469,7 @@ function Message({ msg, sows }: { msg: ChatMessage; sows: any[] }) {
                       <ActionCard
                         actionType={actionType} payload={payload} sows={sows}
                         onConfirm={() => {
-                          // Reload app data so refile changes reflect in the folder tree immediately
-                          if (actionType === 'refile_file') {
-                            fetch('/api/data').then(r => r.json()).then(d => {
-                              // Trigger a data refresh by dispatching a storage event the App listens to
-                              window.dispatchEvent(new Event('pmtracking:reload'))
-                            }).catch(() => {})
-                          }
+                          if (actionType === 'refile_file') reloadData()
                         }}
                         onDismiss={() => setDismissed(prev => new Set([...prev, key]))}
                       />
@@ -499,7 +493,7 @@ function Message({ msg, sows }: { msg: ChatMessage; sows: any[] }) {
 
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function Assistant() {
-  const { data, setData } = useApp()
+  const { data, setData, reloadData } = useApp()
 
   const [messages,         setMessages]         = useState<ChatMessage[]>([])
   const [input,            setInput]            = useState('')
