@@ -266,6 +266,7 @@ export interface Issue {
   status: IssueStatus
   owner: string
   raisedFromRiskId?: string         // set if promoted from a Risk
+  history: RaidHistoryEntry[]
   createdAt: string
 }
 

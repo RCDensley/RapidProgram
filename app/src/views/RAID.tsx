@@ -291,38 +291,85 @@ function IssueModal({ issue, sows, onSave, onDelete, onClose }: {
   onDelete?: () => void
   onClose: () => void
 }) {
-  const [i, setI] = useState<Partial<Issue>>(issue)
+  const [i, setI]       = useState<Partial<Issue>>(issue)
+  const [comment, setComment] = useState('')
+
+  function addComment() {
+    if (!comment.trim()) return
+    const entry: RaidHistoryEntry = { id: uuidv4(), timestamp: new Date().toISOString(), type: 'comment', text: comment.trim() }
+    setI(p => ({ ...p, history: [...(p.history ?? []), entry] }))
+    setComment('')
+  }
+
+  function setStatus(status: IssueStatus) {
+    const prev = i.status
+    const entry: RaidHistoryEntry = { id: uuidv4(), timestamp: new Date().toISOString(), type: 'status_change', text: `Status changed from ${prev ?? 'Open'} to ${status}` }
+    setI(p => ({ ...p, status, history: [...(p.history ?? []), entry] }))
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ width: 580, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{issue.id ? 'Edit Issue' : 'Add Issue'}</h3>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div className="field"><label className="field-label">Title</label>
-            <input className="field-input" autoFocus value={i.title ?? ''} onChange={e => setI(p => ({ ...p, title: e.target.value }))} /></div>
-          <div className="field"><label className="field-label">Description</label>
-            <textarea className="field-input" rows={2} style={{ resize: 'vertical', fontFamily: 'var(--font-main)' }} value={i.description ?? ''} onChange={e => setI(p => ({ ...p, description: e.target.value }))} /></div>
+          <div className="field">
+            <label className="field-label">Title</label>
+            <input className="field-input" autoFocus value={i.title ?? ''} onChange={e => setI(p => ({ ...p, title: e.target.value }))} />
+          </div>
+          <div className="field">
+            <label className="field-label">Description</label>
+            <textarea className="field-input" rows={2} style={{ resize: 'vertical', fontFamily: 'var(--font-main)' }} value={i.description ?? ''} onChange={e => setI(p => ({ ...p, description: e.target.value }))} />
+          </div>
           <div className="field-row">
-            <div className="field"><label className="field-label">Project</label>
+            <div className="field">
+              <label className="field-label">Project</label>
               <select className="field-input" value={i.sowId ?? '__program__'} onChange={e => setI(p => ({ ...p, sowId: e.target.value === '__program__' ? null : e.target.value }))}>
                 <option value="__program__">Program-level</option>
                 {sows.map(s => <option key={s.id} value={s.id}>{s.shortName}</option>)}
-              </select></div>
-            <div className="field"><label className="field-label">Impact</label>
+              </select>
+            </div>
+            <div className="field">
+              <label className="field-label">Impact</label>
               <select className="field-input" value={i.impact ?? 'Medium'} onChange={e => setI(p => ({ ...p, impact: e.target.value as IssueImpact }))}>
                 {(['Low', 'Medium', 'High', 'Critical'] as IssueImpact[]).map(imp => <option key={imp} value={imp}>{imp}</option>)}
-              </select></div>
+              </select>
+            </div>
           </div>
           <div className="field-row">
-            <div className="field"><label className="field-label">Status</label>
-              <select className="field-input" value={i.status ?? 'Open'} onChange={e => setI(p => ({ ...p, status: e.target.value as IssueStatus }))}>
-                {(['Open', 'In Progress', 'Resolved'] as IssueStatus[]).map(s => <option key={s} value={s}>{s}</option>)}
-              </select></div>
-            <div className="field"><label className="field-label">Owner</label>
-              <input className="field-input" value={i.owner ?? ''} onChange={e => setI(p => ({ ...p, owner: e.target.value }))} /></div>
+            <div className="field">
+              <label className="field-label">Status</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(['Open', 'In Progress', 'Resolved'] as IssueStatus[]).map(s => (
+                  <button key={s} onClick={() => setStatus(s)} style={{
+                    padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700,
+                    border: `1.5px solid ${i.status === s ? '#38bdf8' : 'var(--border)'}`,
+                    background: i.status === s ? 'rgba(56,189,248,0.15)' : 'transparent',
+                    color: i.status === s ? 'var(--sky-bright)' : 'var(--text-3)',
+                    cursor: 'pointer', fontFamily: 'var(--font-main)',
+                  }}>{s}</button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
+              <label className="field-label">Owner</label>
+              <input className="field-input" value={i.owner ?? ''} onChange={e => setI(p => ({ ...p, owner: e.target.value }))} />
+            </div>
           </div>
+
+          <div className="field">
+            <label className="field-label">History &amp; Comments</label>
+            <HistoryLog history={i.history ?? []} />
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <input className="field-input field-input-sm" placeholder="Add comment…"
+                style={{ flex: 1 }} value={comment} onChange={e => setComment(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addComment()} />
+              <button className="btn-ghost btn-sm" onClick={addComment}><Plus size={11} /></button>
+            </div>
+          </div>
+
           <div className="modal-actions">
             {onDelete && <button className="btn-danger" onClick={onDelete}><Trash2 size={12} /> Delete</button>}
             <button className="btn-secondary" onClick={onClose}>Cancel</button>
@@ -386,7 +433,7 @@ export default function RAID() {
   const [tab, setTab]     = useState<'risks' | 'issues' | 'decisions'>('risks')
 
   const [filterSow,    setFilterSow]    = useState<string>('all')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('active')
   const [matrixFilter, setMatrixFilter] = useState<{l:number;i:number}|null>(null)
 
   const [editRisk,     setEditRisk]     = useState<Partial<Risk> | null>(null)
@@ -459,6 +506,7 @@ export default function RAID() {
           impact:      (row[idx('impact')]?.trim() || 'Medium') as IssueImpact,
           status:      (row[idx('status')]?.trim() || 'Open') as IssueStatus,
           owner:       row[idx('owner')]?.trim() || '',
+          history:     [],
           createdAt:   row[idx('created')]?.trim() || new Date().toISOString(),
         }))
         const toAdd = newIssues.filter(i => !existing.has(i.id))
@@ -525,6 +573,7 @@ export default function RAID() {
       impact:         'High',
       status:         'Open',
       owner:          risk.owner ?? '',
+      history:        [],
       raisedFromRiskId: risk.id,
       createdAt:      new Date().toISOString(),
     }
@@ -548,6 +597,7 @@ export default function RAID() {
       impact:         partial.impact ?? 'Medium',
       status:         partial.status ?? 'Open',
       owner:          partial.owner ?? '',
+      history:        partial.history ?? [],
       raisedFromRiskId: partial.raisedFromRiskId,
       createdAt:      partial.createdAt ?? new Date().toISOString(),
     }
@@ -589,14 +639,16 @@ export default function RAID() {
   // ── Filtered data ────────────────────────────────────────────────────────────
   const filteredRisks = data.risks.filter(r => {
     if (filterSow !== 'all' && r.sowId !== filterSow) return false
-    if (filterStatus !== 'all' && r.status !== filterStatus) return false
+    if (filterStatus === 'active' && r.status === 'Closed') return false
+    if (filterStatus !== 'all' && filterStatus !== 'active' && r.status !== filterStatus) return false
     if (matrixFilter && (r.likelihood !== matrixFilter.l || r.impact !== matrixFilter.i)) return false
     return true
   }).sort((a, b) => riskScore(b) - riskScore(a))
 
   const filteredIssues = data.issues.filter(i => {
     if (filterSow !== 'all' && i.sowId !== filterSow) return false
-    if (filterStatus !== 'all' && i.status !== filterStatus) return false
+    if (filterStatus === 'active' && i.status === 'Resolved') return false
+    if (filterStatus !== 'all' && filterStatus !== 'active' && i.status !== filterStatus) return false
     return true
   })
 
@@ -650,6 +702,7 @@ export default function RAID() {
         </select>
         {tab !== 'decisions' && (
           <select className="field-input field-input-sm" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <option value="active">Open / In Progress</option>
             <option value="all">All statuses</option>
             {tab === 'risks'
               ? ['Open','Mitigated','Closed'].map(s => <option key={s} value={s}>{s}</option>)
