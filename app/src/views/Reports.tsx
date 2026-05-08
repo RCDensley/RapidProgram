@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import { useApp } from '../App'
 import {
   sowTotalBudget, sowActualCost, generateBurndownSeries, getUpcomingMilestones,
+  monthsBetween, dateToMonthOffset,
 } from '../utils/calculations'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -15,7 +16,7 @@ import {
 import dayjs from 'dayjs'
 import {
   AppData, SavedReport, BudgetSnapshot, RagStatus,
-  riskScore, ISSUE_IMPACT_COLORS,
+  riskScore, ISSUE_IMPACT_COLORS, PHASE_COLORS, PhaseName,
 } from '../types'
 
 // ─── Local types ──────────────────────────────────────────────────────────────
@@ -475,6 +476,176 @@ function NarrativeSection({ value, onChange, placeholder, editing }: {
   )
 }
 
+// ─── Program Roadmap (static SVG snapshot of the Gantt) ──────────────────────
+const RS_LABEL_W  = 112   // left SOW name column
+const RS_MONTH_W  = 80    // pixels per month (intrinsic — viewBox scales to fit)
+const RS_HEADER_H = 28    // month label row
+const RS_MS_H     = 22    // program milestone band
+const RS_ROW_H    = 42    // height per SOW row
+const RS_LEGEND_H = 16    // phase colour legend at the bottom
+
+function ProgramRoadmap({ data }: { data: AppData }) {
+  const allStarts = data.sows.map(s => s.startDate).filter(Boolean).sort()
+  const allEnds   = data.sows.map(s => s.endDate).filter(Boolean).sort().reverse()
+  if (!allStarts.length) return null
+
+  const calStart  = dayjs(allStarts[0]).subtract(1, 'month').startOf('month').format('YYYY-MM-DD')
+  const calEnd    = dayjs(allEnds[0]).add(2, 'month').endOf('month').format('YYYY-MM-DD')
+  const months    = monthsBetween(calStart, calEnd)
+  const chartW    = months.length * RS_MONTH_W
+  const totalW    = RS_LABEL_W + chartW
+
+  const progMs    = data.milestones.filter(m => m.sowId === null)
+  const hasPMs    = progMs.length > 0
+  const bodyStartY = RS_HEADER_H + (hasPMs ? RS_MS_H : 0)
+  const totalH    = bodyStartY + data.sows.length * RS_ROW_H + RS_LEGEND_H + 4
+
+  const dToX = (d: string) => RS_LABEL_W + dateToMonthOffset(d, calStart) * RS_MONTH_W
+
+  const today  = dayjs().format('YYYY-MM-DD')
+  const todayX = dToX(today)
+
+  const phaseEntries = Object.entries(PHASE_COLORS) as [PhaseName, string][]
+
+  return (
+    <svg
+      viewBox={`0 0 ${totalW} ${totalH}`}
+      width="100%"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: 'block', borderRadius: 6, overflow: 'hidden' }}
+    >
+      {/* Canvas background */}
+      <rect x={0} y={0} width={totalW} height={totalH} fill="#0F172A" rx={6} />
+
+      {/* ── Month header ── */}
+      <rect x={RS_LABEL_W} y={0} width={chartW} height={RS_HEADER_H} fill="#1E293B" />
+      {months.map((m, i) => {
+        const x       = RS_LABEL_W + i * RS_MONTH_W
+        const isCurr  = dayjs(m).isSame(dayjs(), 'month')
+        return (
+          <g key={m}>
+            <line x1={x} y1={RS_HEADER_H} x2={x} y2={totalH - RS_LEGEND_H} stroke="#1E293B" strokeWidth={1} />
+            <text x={x + RS_MONTH_W / 2} y={RS_HEADER_H - 8}
+              textAnchor="middle"
+              fill={isCurr ? '#38BDF8' : '#64748B'}
+              fontSize={9} fontFamily="Nunito, sans-serif" fontWeight={isCurr ? 800 : 600}>
+              {dayjs(m).format('MMM YY')}
+            </text>
+          </g>
+        )
+      })}
+
+      {/* ── Program milestone band ── */}
+      {hasPMs && (
+        <>
+          <rect x={RS_LABEL_W} y={RS_HEADER_H} width={chartW} height={RS_MS_H} fill="#060D1A" />
+          {progMs.map(ms => {
+            const mx = dToX(ms.date)
+            const my = RS_HEADER_H + RS_MS_H / 2
+            const s  = 6
+            return (
+              <g key={ms.id}>
+                <polygon points={`${mx},${my - s} ${mx + s},${my} ${mx},${my + s} ${mx - s},${my}`}
+                  fill={ms.color} opacity={0.95} />
+                <text x={mx + 10} y={my + 4}
+                  fill={ms.color} fontSize={8} fontFamily="Nunito, sans-serif" fontWeight={700}>
+                  {ms.label.length > 18 ? ms.label.slice(0, 18) + '…' : ms.label}
+                </text>
+              </g>
+            )
+          })}
+        </>
+      )}
+
+      {/* ── SOW rows ── */}
+      {data.sows.map((sow, i) => {
+        const y     = bodyStartY + i * RS_ROW_H
+        const sowMs = data.milestones.filter(m => m.sowId === sow.id)
+        const sx1   = dToX(sow.startDate)
+        const sx2   = dToX(sow.endDate)
+
+        return (
+          <g key={sow.id}>
+            {/* Row background */}
+            <rect x={0} y={y} width={totalW} height={RS_ROW_H} fill={sow.color + '08'} />
+            <line x1={0} y1={y + RS_ROW_H} x2={totalW} y2={y + RS_ROW_H} stroke="#1E293B" strokeWidth={1} />
+
+            {/* SOW name label */}
+            <text x={8} y={y + RS_ROW_H / 2 + 4}
+              fill={sow.color} fontSize={9.5} fontFamily="Nunito, sans-serif" fontWeight={800}>
+              {sow.shortName.length > 13 ? sow.shortName.slice(0, 13) + '…' : sow.shortName}
+            </text>
+
+            {/* Full SOW extent — faint tint bar */}
+            <rect x={sx1} y={y + 5} width={Math.max(2, sx2 - sx1)} height={RS_ROW_H - 10}
+              rx={3} fill={sow.color + '14'} />
+
+            {/* Phase blocks */}
+            {sow.phases.map(phase => {
+              const x1 = dToX(phase.startDate)
+              const x2 = dToX(phase.endDate)
+              const w  = Math.max(4, x2 - x1)
+              const c  = PHASE_COLORS[phase.name]
+              return (
+                <g key={phase.id}>
+                  <rect x={x1} y={y + 9} width={w} height={RS_ROW_H - 18} rx={4}
+                    fill={c + 'dd'} stroke={c} strokeWidth={1} />
+                  {w > 26 && (
+                    <text x={x1 + w / 2} y={y + RS_ROW_H / 2 + 4}
+                      textAnchor="middle" fill="#fff" fontSize={8.5}
+                      fontFamily="Nunito, sans-serif" fontWeight={700}>
+                      {w > 50 ? phase.name : phase.name.slice(0, 3)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+
+            {/* SOW-level milestone diamonds */}
+            {sowMs.map(ms => {
+              const mx = dToX(ms.date)
+              const my = y + RS_ROW_H / 2
+              const s  = 5
+              return (
+                <polygon key={ms.id}
+                  points={`${mx},${my - s} ${mx + s},${my} ${mx},${my + s} ${mx - s},${my}`}
+                  fill={ms.color} opacity={0.9} />
+              )
+            })}
+          </g>
+        )
+      })}
+
+      {/* ── Today line ── */}
+      {todayX >= RS_LABEL_W && todayX <= totalW && (
+        <g>
+          <line x1={todayX} y1={RS_HEADER_H} x2={todayX} y2={totalH - RS_LEGEND_H}
+            stroke="#38BDF8" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.7} />
+          <rect x={todayX - 13} y={RS_HEADER_H} width={26} height={10} rx={3} fill="#38BDF8" opacity={0.15} />
+          <text x={todayX} y={RS_HEADER_H + 8}
+            textAnchor="middle" fill="#38BDF8" fontSize={7.5}
+            fontFamily="Nunito, sans-serif" fontWeight={800}>TODAY</text>
+        </g>
+      )}
+
+      {/* ── Phase legend ── */}
+      <rect x={0} y={totalH - RS_LEGEND_H} width={totalW} height={RS_LEGEND_H} fill="#1E293B" />
+      {phaseEntries.map(([name, color], i) => {
+        const lx = RS_LABEL_W + i * 100
+        return (
+          <g key={name}>
+            <rect x={lx} y={totalH - RS_LEGEND_H + 5} width={10} height={7} rx={2} fill={color + 'dd'} />
+            <text x={lx + 14} y={totalH - RS_LEGEND_H + 12}
+              fill="#94A3B8" fontSize={8} fontFamily="Nunito, sans-serif" fontWeight={600}>
+              {name}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 // ─── Milestones Table ─────────────────────────────────────────────────────────
 function MilestonesTable({ data }: { data: AppData }) {
   const milestones = getUpcomingMilestones(data).slice(0, 12)
@@ -611,6 +782,11 @@ function ReportBody({
   return (
     <>
       <PrintHeader title={title} periodFrom={periodFrom} periodTo={periodTo} createdAt={createdAt} />
+
+      {/* 0. Program Roadmap */}
+      <Section title="Program Roadmap">
+        <ProgramRoadmap data={data} />
+      </Section>
 
       {/* 1. Project Health */}
       <Section title="Project Health">
