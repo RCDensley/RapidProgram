@@ -541,3 +541,99 @@ body {
 
 /* Tooltip hint for snap guides */
 .snap-guide { pointer-events: none; }
+
+/* ─── Print / Report export ───────────────────────────────────────────────── */
+
+/* Hidden on screen, shown when printing */
+.print-only { display: none; }
+
+/* ─── Narrative section preview (editor mode) ──────────────────────────────── */
+/* On screen: styled preview box below the textarea */
+.narrative-preview-wrap {
+  margin-top: 0;
+  padding: 10px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 40px;
+}
+.narrative-preview-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+@media print {
+  /* Override CSS tokens to light theme for clean document output */
+  :root {
+    --bg:       #ffffff;
+    --surface:  #ffffff;
+    --card:     #f4f6f9;
+    --border:   #d1d5db;
+    --border-2: #9ca3af;
+    --text-1:   #111827;
+    --text-2:   #374151;
+    --text-3:   #6b7280;
+    /* Keep accent colours — they read on both dark and light */
+  }
+
+  /* Page setup */
+  @page { margin: 18mm 20mm; size: A4 portrait; }
+
+  body { background: #ffffff; color: #111827; }
+
+  /* Hide all chrome */
+  .sidebar,
+  .save-banner,
+  .no-print { display: none !important; }
+
+  /* Reveal print-only content */
+  .print-only { display: block !important; }
+
+  /* App shell: collapse flex so report fills the page */
+  .app-shell {
+    display: block !important;
+    height: auto !important;
+  }
+
+  .main-content {
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    max-width: 100% !important;
+  }
+
+  /* Reports view: remove viewport-clipping containers */
+  .reports-shell {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .reports-content {
+    overflow: visible !important;
+    height: auto !important;
+    padding: 0 !important;
+  }
+
+  /* Narrative preview: strip box styling for print — just the content */
+  .narrative-preview-wrap {
+    margin-top: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Prevent sections splitting across pages */
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Ensure chart SVGs and tables don't get clipped */
+  svg { overflow: visible !important; }
+  table { page-break-inside: avoid; }
+}

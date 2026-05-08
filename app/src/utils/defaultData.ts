@@ -221,5 +221,8 @@ export const DEFAULT_DATA: AppData = {
   // DM-6: File repository — empty by default
   projectFiles: [],
 
+  // Reporting — empty by default
+  reports: [],
+
   lastUpdated: new Date().toISOString(),
 }

@@ -318,6 +318,40 @@ export interface ProjectFile {
   classificationStatus: FileClassificationStatus
 }
 
+// ─── Reporting ────────────────────────────────────────────────────────────────
+export type RagStatus = 'R' | 'A' | 'G'
+
+export interface BudgetSnapshot {
+  sowId: string
+  sowName: string
+  totalBudget: number
+  spent: number
+  remaining: number
+  percentUsed: number
+}
+
+export interface SavedReport {
+  id: string
+  title: string
+  createdAt: string
+  periodFrom: string
+  periodTo: string
+  ragStatus: {
+    overall:   RagStatus
+    timeline:  RagStatus
+    budget:    RagStatus
+    scope:     RagStatus
+    resources: RagStatus
+  }
+  ragComments?: Record<string, string>   // per-dimension optional comment, keyed by RagDimension
+  recentActivity: string
+  upcomingActivities: string
+  selectedRiskIds: string[]
+  selectedIssueIds: string[]
+  selectedDecisionIds: string[]
+  budgetSnapshot: BudgetSnapshot[]
+}
+
 // ─── App state (persisted to Azure Blob) ─────────────────────────────────────
 export interface AppData {
   sows: SOW[]
@@ -331,5 +365,6 @@ export interface AppData {
   issues: Issue[]            // DM-5
   decisions: Decision[]      // DM-5
   projectFiles: ProjectFile[] // DM-6
+  reports: SavedReport[]     // Reporting
   lastUpdated: string
 }

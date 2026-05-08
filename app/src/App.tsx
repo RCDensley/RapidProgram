@@ -11,9 +11,10 @@ import Settings from './views/Settings'
 import Tasks from './views/Tasks'
 import RAID from './views/RAID'
 import Assistant from './views/Assistant'
+import Reports from './views/Reports'
 import {
   LayoutDashboard, CalendarDays, Users, Upload, Settings2, Loader2,
-  Building2, AlertTriangle, CheckSquare, ShieldAlert, Bot,
+  Building2, AlertTriangle, CheckSquare, ShieldAlert, Bot, BarChart3,
 } from 'lucide-react'
 
 // ─── App Context ──────────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ const NAV = [
   { to: '/raid',       label: 'RAID Log',     icon: ShieldAlert },
   { to: '/timesheets', label: 'Timesheets',   icon: Upload },
   { to: '/assistant',  label: 'Assistant',    icon: Bot },
+  { to: '/reports',    label: 'Reports',      icon: BarChart3 },
   { to: '/settings',   label: 'Settings',     icon: Settings2 },
 ]
 
@@ -151,6 +153,7 @@ export default function App() {
               <Route path="/raid"       element={<RAID />} />
               <Route path="/timesheets" element={<Timesheets />} />
               <Route path="/assistant"  element={<Assistant />} />
+              <Route path="/reports"    element={<Reports />} />
               <Route path="/settings"   element={<Settings />} />
             </Routes>
           </main>
