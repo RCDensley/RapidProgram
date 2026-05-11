@@ -71,7 +71,7 @@ Show current-phase exit criteria directly on the Dashboard per-SOW panel (read +
 ---
 
 ### Issue 4 · Phase exit criteria — AI system prompt
-**System:** PMTracking (API) · **Status:** `[ ]`
+**System:** PMTracking (API) · **Status:** `[x]`
 **Depends on:** #1, #2
 
 Inject phase exit criteria into the AI system prompt so it can prioritise work and answer "what should I focus on today".

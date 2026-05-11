@@ -60,7 +60,13 @@ function buildSystemPrompt(appData: any): string {
 
   const sowSummary = sows.map((s: any) => {
     const budget  = (s.budgetSources ?? []).reduce((t: number, b: any) => t + b.amount, 0)
-    const phases  = (s.phases ?? []).map((p: any) => `${p.name}: ${p.startDate} → ${p.endDate}`).join(', ')
+    const phases  = (s.phases ?? []).map((p: any) => {
+      const base = `${p.name}: ${p.startDate} → ${p.endDate}`
+      const criteria = (p.criteria ?? []) as { text: string; done: boolean }[]
+      if (criteria.length === 0) return base
+      const cText = criteria.map(c => `${c.done ? '✓' : '○'} ${c.text}`).join('; ')
+      return `${base} [criteria: ${cText}]`
+    }).join(', ')
     const sources = (s.budgetSources ?? []).map((b: any) => `${b.label}: $${b.amount.toLocaleString()}`).join(', ')
     return `  - ${s.name} (${s.shortName}) | Status: ${s.status} | Budget: $${budget.toLocaleString()} [${sources}] | ${s.startDate} → ${s.endDate} | Phases: ${phases}`
   }).join('\n')
