@@ -9,6 +9,12 @@ dependencies = [
     "schedule",
     "plyer",
     "winotify",
+    "sounddevice",
+    "numpy",
+    "torch",
+    "torchaudio",
+    "openai-whisper",
+    "packaging",
 ]
 
 [build-system]

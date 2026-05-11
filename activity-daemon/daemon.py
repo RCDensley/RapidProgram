@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 import requests
 from capture.apps import AppTracker, POLL_INTERVAL
+from capture.audio import AudioTracker
 from uploader import upload_batch
 from notifier import notify_checkin
 
@@ -69,14 +70,18 @@ def main():
     # ── App/window tracker ────────────────────────────────────────────────────
     tracker = AppTracker()
 
+    # ── Audio tracker (loads models in background; disables itself if unavailable)
+    audio_tracker = AudioTracker()
+    audio_tracker.start()
+
     def do_sample():
         tracker.sample()
 
     def do_flush():
-        entries = tracker.flush()
-        # Additional capture streams (audio, screen) will append to entries here
-        # in Issues 17 and 18.
-        upload_batch(api_url, daemon_key, entries)
+        app_entries   = tracker.flush()
+        audio_entries = audio_tracker.flush()   # empty list if audio disabled
+        # Screen context entries appended here in Issue 18
+        upload_batch(api_url, daemon_key, app_entries + audio_entries)
 
     # ── Hourly check-in ───────────────────────────────────────────────────────
     checkin_mins   = config.get('check_in_interval_minutes', 60)
@@ -119,8 +124,8 @@ def main():
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
-        # Flush any remaining entries before exit
         log.info('Flushing final batch before exit…')
+        audio_tracker.stop()
         do_flush()
         log.info('Daemon stopped.')
 

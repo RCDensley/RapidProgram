@@ -365,7 +365,7 @@ Schedule `POST /api/checkin` every hour. Fire a Windows toast notification on su
 ## Phase 5 — Audio
 
 ### Issue 17 · Python daemon — audio capture with VAD + Whisper
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** #13, #14
 
 Mic → silero-vad filter → Whisper small → transcript chunks added to activity batch.
