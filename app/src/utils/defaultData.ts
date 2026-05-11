@@ -224,5 +224,8 @@ export const DEFAULT_DATA: AppData = {
   // Reporting — empty by default
   reports: [],
 
+  // Persisted chat threads — empty by default
+  threads: [],
+
   lastUpdated: new Date().toISOString(),
 }

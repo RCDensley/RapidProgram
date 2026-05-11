@@ -326,6 +326,26 @@ export interface ProjectFile {
   classificationStatus: FileClassificationStatus
 }
 
+// ─── Chat threads (persisted) ─────────────────────────────────────────────────
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+}
+
+export type ThreadType = 'chat' | 'checkin'
+
+export interface ChatThread {
+  id: string
+  type: ThreadType
+  title: string
+  createdAt: string
+  updatedAt: string
+  messages: ChatMessage[]
+  pinned?: boolean
+}
+
 // ─── Reporting ────────────────────────────────────────────────────────────────
 export type RagStatus = 'R' | 'A' | 'G'
 
@@ -374,5 +394,6 @@ export interface AppData {
   decisions: Decision[]      // DM-5
   projectFiles: ProjectFile[] // DM-6
   reports: SavedReport[]     // Reporting
+  threads: ChatThread[]      // Persisted chat threads
   lastUpdated: string
 }

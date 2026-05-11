@@ -93,7 +93,7 @@ Inject phase exit criteria into the AI system prompt so it can prioritise work a
 ## Phase 2 — Saved Chat Threads
 
 ### Issue 5 · Saved chat threads — types & storage
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** nothing (parallel to Phase 1)
 
 Add `ChatMessage`, `ChatThread`, `ThreadType` interfaces and `threads: ChatThread[]` to `AppData`.
