@@ -1,0 +1,11 @@
+config.toml
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+pending-batches.jsonl
+*.egg-info/
+dist/
+build/

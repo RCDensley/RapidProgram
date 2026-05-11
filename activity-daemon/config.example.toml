@@ -1,0 +1,19 @@
+# PM Tracker Activity Daemon — Configuration
+# Copy this file to config.toml and fill in your values.
+# config.toml is gitignored — never commit it (it contains your API key).
+
+# URL of your PM Tracker deployment (no trailing slash)
+api_url = "https://proud-ocean-0339de800.7.azurestaticapps.net"
+
+# The DAEMON_API_KEY value you set in Azure App Settings
+daemon_api_key = "your-key-here"
+
+# Your member initials — must match a resource record in PM Tracker
+# Used for timesheet export (e.g. CDensley)
+member_initials = "CDensley"
+
+# How often to send activity batches to the API (minutes)
+batch_interval_minutes = 15
+
+# How often to trigger an hourly check-in (minutes)
+check_in_interval_minutes = 60

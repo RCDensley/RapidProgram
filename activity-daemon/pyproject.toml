@@ -1,0 +1,19 @@
+[project]
+name = "pmtracker-daemon"
+version = "0.1.0"
+description = "Local activity monitoring daemon for PM Tracker"
+requires-python = ">=3.11"
+dependencies = [
+    "pygetwindow",
+    "requests",
+    "schedule",
+    "plyer",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["capture*"]

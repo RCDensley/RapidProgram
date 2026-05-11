@@ -252,7 +252,7 @@ Return today's activity log via GET and inject it into the AI system prompt.
 ## Phase 4 — Python Daemon (Core)
 
 ### Issue 12 · Python daemon — project setup & config
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** nothing
 
 Project scaffold: `pyproject.toml`, `config.toml` (gitignored), `config.example.toml`, main loop.
