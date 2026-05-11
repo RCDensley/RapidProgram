@@ -11,8 +11,10 @@ import tomllib
 import schedule
 import time
 from pathlib import Path
+import requests
 from capture.apps import AppTracker, POLL_INTERVAL
 from uploader import upload_batch
+from notifier import notify_checkin
 
 logging.basicConfig(
     level=logging.INFO,
@@ -76,11 +78,40 @@ def main():
         # in Issues 17 and 18.
         upload_batch(api_url, daemon_key, entries)
 
+    # ── Hourly check-in ───────────────────────────────────────────────────────
+    checkin_mins   = config.get('check_in_interval_minutes', 60)
+    assistant_url  = f'{api_url.rstrip("/")}/assistant'
+
+    def do_checkin():
+        try:
+            res = requests.post(
+                f'{api_url.rstrip("/")}/api/checkin',
+                headers={'X-Daemon-Key': daemon_key},
+                timeout=60,  # AI call can take a moment
+            )
+            if res.status_code == 401:
+                log.error('Check-in rejected — check daemon_api_key in config.toml')
+                return
+            if not res.ok:
+                log.warning(f'Check-in failed: HTTP {res.status_code}')
+                return
+            result  = res.json()
+            title   = result.get('title', 'Check-in ready')
+            log.info(f'Check-in created: {title}')
+            notify_checkin(title, assistant_url)
+        except requests.RequestException as e:
+            log.warning(f'Check-in error (will retry next interval): {e}')
+        except Exception as e:
+            log.error(f'Check-in unexpected error: {e}')
+
     # Sample every POLL_INTERVAL seconds
     schedule.every(POLL_INTERVAL).seconds.do(do_sample)
 
     # Flush and upload every batch_interval_minutes
     schedule.every(batch_mins).minutes.do(do_flush)
+
+    # Trigger check-in every check_in_interval_minutes
+    schedule.every(checkin_mins).minutes.do(do_checkin)
 
     log.info('Scheduler running — Ctrl+C to stop')
     try:

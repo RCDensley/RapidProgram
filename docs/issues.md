@@ -343,7 +343,7 @@ New `/api/checkin` endpoint: reads activity + project state, calls AI, saves res
 ---
 
 ### Issue 16 · Python daemon — hourly check-in trigger & Windows notification
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** #14, #15
 
 Schedule `POST /api/checkin` every hour. Fire a Windows toast notification on success linking to the Assistant tab.
