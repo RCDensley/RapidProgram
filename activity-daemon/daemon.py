@@ -11,6 +11,8 @@ import tomllib
 import schedule
 import time
 from pathlib import Path
+from capture.apps import AppTracker, POLL_INTERVAL
+from uploader import upload_batch
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,8 +60,27 @@ def main():
     log.info(f'  Batch interval: {config.get("batch_interval_minutes", 15)} min')
     log.info(f'  Check-in:       {config.get("check_in_interval_minutes", 60)} min')
 
-    # Capture and upload jobs are registered here as issues 13-16 are implemented.
-    # For now the scheduler loop is in place and ready to receive jobs.
+    api_url    = config['api_url']
+    daemon_key = config['daemon_api_key']
+    batch_mins = config.get('batch_interval_minutes', 15)
+
+    # ── App/window tracker ────────────────────────────────────────────────────
+    tracker = AppTracker()
+
+    def do_sample():
+        tracker.sample()
+
+    def do_flush():
+        entries = tracker.flush()
+        # Additional capture streams (audio, screen) will append to entries here
+        # in Issues 17 and 18.
+        upload_batch(api_url, daemon_key, entries)
+
+    # Sample every POLL_INTERVAL seconds
+    schedule.every(POLL_INTERVAL).seconds.do(do_sample)
+
+    # Flush and upload every batch_interval_minutes
+    schedule.every(batch_mins).minutes.do(do_flush)
 
     log.info('Scheduler running — Ctrl+C to stop')
     try:
@@ -67,6 +88,9 @@ def main():
             schedule.run_pending()
             time.sleep(1)
     except KeyboardInterrupt:
+        # Flush any remaining entries before exit
+        log.info('Flushing final batch before exit…')
+        do_flush()
         log.info('Daemon stopped.')
 
 

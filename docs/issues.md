@@ -276,7 +276,7 @@ Project scaffold: `pyproject.toml`, `config.toml` (gitignored), `config.example.
 ---
 
 ### Issue 13 · Python daemon — app/window focus tracker
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** #12
 
 Poll foreground window every 30s, aggregate consecutive identical windows into timed entries.
@@ -298,7 +298,7 @@ Poll foreground window every 30s, aggregate consecutive identical windows into t
 ---
 
 ### Issue 14 · Python daemon — activity batcher & uploader
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** #9, #10, #12, #13
 
 Collect entries from all streams, POST to `/api/activity` every 15 min. Retry queue for failures.
