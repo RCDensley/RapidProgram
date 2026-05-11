@@ -47,11 +47,18 @@ export const PHASE_COLORS: Record<PhaseName, string> = {
 
 export const ALL_PHASES: PhaseName[] = ['Discover', 'Plan', 'Deliver', 'Handover']
 
+export interface PhaseCriterion {
+  id: string
+  text: string
+  done: boolean
+}
+
 export interface Phase {
   id: string
   name: PhaseName
   startDate: string   // YYYY-MM-DD
   endDate: string     // YYYY-MM-DD
+  criteria?: PhaseCriterion[]
 }
 
 // ─── DM-2: Budget sources ─────────────────────────────────────────────────────

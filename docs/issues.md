@@ -8,7 +8,7 @@
 ## Phase 1 — Phase Exit Criteria
 
 ### Issue 1 · Phase exit criteria — types & data model
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** nothing
 
 Add `PhaseCriterion` interface and `criteria` field to `Phase` — the type foundation all other Phase 1 issues build on.

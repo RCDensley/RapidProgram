@@ -219,4 +219,4 @@ _Add entries here as issues are completed. Note anything surprising, any pattern
 
 | Date | Issue | Learning |
 |---|---|---|
-| — | — | — |
+| 2026-05-11 | #1 | `criteria?: PhaseCriterion[]` optional field — no defaultData change needed. All consumers must use `phase.criteria ?? []`. Pattern mirrors `pricingType?` on SOW. |
