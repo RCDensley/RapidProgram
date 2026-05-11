@@ -183,7 +183,7 @@ Thread title derived from first user message via a silent AI one-shot call.
 ## Phase 3 — Activity API
 
 ### Issue 9 · Activity API — types & daemon authentication
-**System:** PMTracking (API) · **Status:** `[ ]`
+**System:** PMTracking (API) · **Status:** `[x]`
 **Depends on:** nothing (parallel to Phases 1 and 2)
 
 Define `ActivityEntry` / `ActivityBatch` types and `DAEMON_API_KEY` pre-shared key auth.
@@ -205,7 +205,7 @@ Define `ActivityEntry` / `ActivityBatch` types and `DAEMON_API_KEY` pre-shared k
 ---
 
 ### Issue 10 · Activity API — POST /api/activity
-**System:** PMTracking (API) · **Status:** `[ ]`
+**System:** PMTracking (API) · **Status:** `[x]`
 **Depends on:** #9
 
 Append incoming `ActivityBatch` to daily blob `activity-log/YYYY-MM-DD.json`.
@@ -227,7 +227,7 @@ Append incoming `ActivityBatch` to daily blob `activity-log/YYYY-MM-DD.json`.
 ---
 
 ### Issue 11 · Activity API — GET /api/activity + AI system prompt
-**System:** PMTracking (API) · **Status:** `[ ]`
+**System:** PMTracking (API) · **Status:** `[x]`
 **Depends on:** #9, #10
 
 Return today's activity log via GET and inject it into the AI system prompt.

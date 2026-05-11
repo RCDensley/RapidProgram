@@ -46,7 +46,7 @@ function detectFileReferences(text: string): string[] {
 }
 
 // ─── Build system prompt from project data ────────────────────────────────────
-function buildSystemPrompt(appData: any): string {
+function buildSystemPrompt(appData: any, activityBatches?: any[]): string {
   const sows       = appData.sows ?? []
   const resources  = appData.resources ?? []
   const tasks      = appData.tasks ?? []
@@ -213,7 +213,28 @@ ${decisionSummary}
 
 == FILE REPOSITORY ==
 ${fileSummary}
+${buildActivitySection(activityBatches)}
 `
+}
+
+function buildActivitySection(batches?: any[]): string {
+  if (!batches?.length) return ''
+  const lines: string[] = []
+  for (const batch of batches) {
+    for (const e of (batch.entries ?? [])) {
+      const t = String(e.timestamp ?? '').slice(11, 16)
+      if (e.type === 'app_focus') {
+        const mins = Math.round((e.durationSeconds ?? 0) / 60)
+        lines.push(`  ${t}  ${e.appName ?? 'App'} — ${e.windowTitle ?? ''} (${mins} min)`)
+      } else if (e.type === 'audio_transcript' && e.transcript) {
+        lines.push(`  ${t}  [Transcript] ${e.transcript}`)
+      } else if (e.type === 'screen_context' && e.screenTags) {
+        lines.push(`  ${t}  [Screen] ${e.screenTags}`)
+      }
+    }
+  }
+  if (!lines.length) return ''
+  return `\n== TODAY'S ACTIVITY LOG ==\n${lines.join('\n')}`
 }
 
 // ─── POST /api/ai ─────────────────────────────────────────────────────────────
@@ -234,8 +255,13 @@ app.http('aiChat', {
       const rawData = await readBlob(svc, DATA_CONTAINER, DATA_BLOB)
       const appData = rawData ? JSON.parse(rawData) : {}
 
-      // Build system prompt from live project data
-      const systemPrompt = buildSystemPrompt(appData)
+      // Read today's activity log (if any) and inject into system prompt
+      const todayDate   = new Date().toISOString().slice(0, 10)
+      const activityRaw = await readBlob(svc, DATA_CONTAINER, `activity-log/${todayDate}.json`)
+      const activityLog = activityRaw ? JSON.parse(activityRaw) : []
+
+      // Build system prompt from live project data + today's activity
+      const systemPrompt = buildSystemPrompt(appData, activityLog)
 
       // Detect /filename references in the last user message
       const lastUserMsg   = [...incomingMessages].reverse().find(m => m.role === 'user')
