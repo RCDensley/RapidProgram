@@ -138,7 +138,7 @@ Refactor Assistant to add a left sidebar with thread list, grouped by day, with 
 ---
 
 ### Issue 7 · Saved chat threads — chat saves to active thread
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #5, #6
 
 Every sent/received message is appended to the active thread and persisted immediately via `setData`.
@@ -159,7 +159,7 @@ Every sent/received message is appended to the active thread and persisted immed
 ---
 
 ### Issue 8 · Saved chat threads — auto-title
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #5, #6, #7
 
 Thread title derived from first user message via a silent AI one-shot call.

@@ -528,9 +528,12 @@ export default function Assistant() {
   const activeThread = activeThreadId ? threads.find(t => t.id === activeThreadId) ?? null : null
   const displayMessages = activeThread?.messages ?? []
 
-  const chatEndRef   = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const inputRef     = useRef<HTMLInputElement>(null)
+  const chatEndRef    = useRef<HTMLDivElement>(null)
+  const fileInputRef  = useRef<HTMLInputElement>(null)
+  const inputRef      = useRef<HTMLInputElement>(null)
+  const latestDataRef = useRef(data)  // always points to the most recent data for async callbacks
+
+  useEffect(() => { latestDataRef.current = data }, [data])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -625,6 +628,42 @@ export default function Assistant() {
     if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete) sendMessage()
   }
 
+  // ── Auto-title (fire-and-forget after first message in a new thread) ─────
+  async function autoTitleThread(threadId: string, firstMessage: string) {
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: `Reply with ONLY a 4-6 word thread title (no punctuation, no quotes) for this message: "${firstMessage.slice(0, 200)}"` }],
+        }),
+      })
+      if (!res.ok || !res.body) return
+
+      const reader = res.body.getReader()
+      const dec    = new TextDecoder()
+      let buf      = ''
+      let title    = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n'); buf = lines.pop() ?? ''
+        for (const line of lines) {
+          const t = line.trim()
+          if (!t || t === 'data: [DONE]' || !t.startsWith('data: ')) continue
+          try { const j = JSON.parse(t.slice(6)); if (j.delta) title += j.delta } catch { /* skip */ }
+        }
+      }
+
+      title = title.trim().split('\n')[0].replace(/['"]/g, '').slice(0, 50)
+      if (!title) return
+
+      // Use latestDataRef to avoid stale closure — data will have been updated by the time this resolves
+      const latest = latestDataRef.current
+      setData({ ...latest, threads: (latest.threads ?? []).map(t => t.id === threadId ? { ...t, title } : t) })
+    } catch { /* silently fail — thread keeps 'New Thread' title */ }
+  }
+
   // ── Send message ──────────────────────────────────────────────────────────
   async function sendMessage(text?: string) {
     const msgText = (text ?? input).trim()
@@ -632,6 +671,7 @@ export default function Assistant() {
     setInput(''); setShowAutocomplete(false)
 
     // Ensure an active thread exists
+    const isNewThread = !activeThreadId
     let threadId  = activeThreadId
     let baseData  = data
     if (!threadId) {
@@ -711,6 +751,8 @@ export default function Assistant() {
       })
       setStreamingContent(null)
       setIsStreaming(false)
+      // Fire-and-forget title generation for brand-new threads
+      if (isNewThread) autoTitleThread(threadId!, msgText)
     }
   }
 
