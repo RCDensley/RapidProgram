@@ -114,7 +114,7 @@ Add `ChatMessage`, `ChatThread`, `ThreadType` interfaces and `threads: ChatThrea
 ---
 
 ### Issue 6 · Saved chat threads — Assistant sidebar & thread list
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #5
 
 Refactor Assistant to add a left sidebar with thread list, grouped by day, with New Thread button.

@@ -3,20 +3,13 @@ import ReactMarkdown from 'react-markdown'
 import * as mammoth from 'mammoth'
 import * as XLSX from 'xlsx'
 import { useApp } from '../App'
-import { ProjectFile } from '../types'
+import { ProjectFile, ChatMessage, ChatThread } from '../types'
 import {
   Upload, Trash2, Bot, Send, Loader2, FileText, CheckCircle2,
   AlertTriangle, X, Image, Eye, Plus, ShieldAlert, AlertOctagon, Lightbulb, CheckSquare,
-  ChevronDown, ChevronRight, Folder, FolderOpen,
+  ChevronDown, ChevronRight, Folder, FolderOpen, MessageSquare, Pin, FileStack, Clock,
 } from 'lucide-react'
 import dayjs from 'dayjs'
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  timestamp: string
-}
 
 const SUGGESTED_PROMPTS = [
   'What do I need to do this week?',
@@ -491,11 +484,37 @@ function Message({ msg, sows, onRefileConfirm }: { msg: ChatMessage; sows: any[]
   )
 }
 
+// ─── Thread helpers ───────────────────────────────────────────────────────────
+function threadTypeIcon(type: ChatThread['type']) {
+  return type === 'checkin'
+    ? <Clock size={11} style={{ color: 'var(--sky)', flexShrink: 0 }} />
+    : <MessageSquare size={11} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+}
+
+function groupThreads(threads: ChatThread[]) {
+  const today     = dayjs().startOf('day')
+  const yesterday = dayjs().subtract(1, 'day').startOf('day')
+  const sorted    = [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const pinned    = sorted.filter(t => t.pinned)
+  const rest      = sorted.filter(t => !t.pinned)
+  return {
+    pinned,
+    today:     rest.filter(t => !dayjs(t.updatedAt).isBefore(today)),
+    yesterday: rest.filter(t => dayjs(t.updatedAt).isBefore(today) && !dayjs(t.updatedAt).isBefore(yesterday)),
+    earlier:   rest.filter(t => dayjs(t.updatedAt).isBefore(yesterday)),
+  }
+}
+
 // ─── Main view ────────────────────────────────────────────────────────────────
 export default function Assistant() {
   const { data, setData, reloadData } = useApp()
 
-  const [messages,         setMessages]         = useState<ChatMessage[]>([])
+  // ── Thread state ──────────────────────────────────────────────────────────
+  const [activeThreadId,   setActiveThreadId]   = useState<string | null>(null)
+  const [streamingContent, setStreamingContent] = useState<string | null>(null)
+  const [showFiles,        setShowFiles]        = useState(false)
+
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [input,            setInput]            = useState('')
   const [isStreaming,      setIsStreaming]      = useState(false)
   const [uploading,        setUploading]        = useState(false)
@@ -505,53 +524,53 @@ export default function Assistant() {
   const [acIndex,          setAcIndex]          = useState(0)
   const [collapsed,        setCollapsed]        = useState<Set<string>>(new Set())
 
-  function toggleCollapse(path: string) {
-    setCollapsed(prev => {
-      const next = new Set(prev)
-      next.has(path) ? next.delete(path) : next.add(path)
-      return next
-    })
-  }
-
-  // Build folder tree from files
-  const fileTree = buildTree(data.projectFiles)
+  const threads      = data.threads ?? []
+  const activeThread = activeThreadId ? threads.find(t => t.id === activeThreadId) ?? null : null
+  const displayMessages = activeThread?.messages ?? []
 
   const chatEndRef   = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputRef     = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [displayMessages.length, streamingContent])
 
-  const acFiles = data.projectFiles.filter(f =>
-    acQuery === '' || f.name.toLowerCase().includes(acQuery.toLowerCase())
-  ).slice(0, 8)
-
-  function handleInputChange(val: string) {
-    setInput(val)
-    const lastSlash = val.lastIndexOf('/')
-    if (lastSlash !== -1) {
-      const query = val.slice(lastSlash + 1)
-      if (!query.includes(' ')) { setAcQuery(query); setShowAutocomplete(true); setAcIndex(0); return }
+  // ── Thread operations ─────────────────────────────────────────────────────
+  function buildNewThread(): { thread: ChatThread; updatedData: typeof data } {
+    const thread: ChatThread = {
+      id: crypto.randomUUID(), type: 'chat', title: 'New Thread',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      messages: [],
     }
-    setShowAutocomplete(false)
+    return { thread, updatedData: { ...data, threads: [...threads, thread] } }
   }
 
-  function insertFileRef(file: ProjectFile) {
-    const lastSlash = input.lastIndexOf('/')
-    const before    = lastSlash === -1 ? input : input.slice(0, lastSlash)
-    setInput(`${before}/${file.name} `)
-    setShowAutocomplete(false)
-    inputRef.current?.focus()
+  function createAndSelectThread() {
+    const { thread, updatedData } = buildNewThread()
+    setData(updatedData)
+    setActiveThreadId(thread.id)
+    setStreamingContent(null)
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (showAutocomplete && acFiles.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setAcIndex(i => Math.min(i + 1, acFiles.length - 1)); return }
-      if (e.key === 'ArrowUp')   { e.preventDefault(); setAcIndex(i => Math.max(i - 1, 0)); return }
-      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); insertFileRef(acFiles[acIndex]); return }
-      if (e.key === 'Escape') { setShowAutocomplete(false); return }
-    }
-    if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete) sendMessage()
+  function pinThread(id: string) {
+    setData({
+      ...data,
+      threads: threads.map(t => t.id === id ? { ...t, pinned: !t.pinned } : t),
+    })
+  }
+
+  function deleteThread(id: string) {
+    if (!confirm('Delete this thread? This cannot be undone.')) return
+    setData({ ...data, threads: threads.filter(t => t.id !== id) })
+    if (activeThreadId === id) setActiveThreadId(null)
+  }
+
+  // ── File operations ───────────────────────────────────────────────────────
+  const fileTree = buildTree(data.projectFiles)
+
+  function toggleCollapse(path: string) {
+    setCollapsed(prev => { const n = new Set(prev); n.has(path) ? n.delete(path) : n.add(path); return n })
   }
 
   async function handleUpload(file: File) {
@@ -574,23 +593,82 @@ export default function Assistant() {
     setData({ ...data, projectFiles: data.projectFiles.filter(f => f.storageName !== storageName) })
   }
 
+  // ── Input / autocomplete ──────────────────────────────────────────────────
+  const acFiles = data.projectFiles.filter(f =>
+    acQuery === '' || f.name.toLowerCase().includes(acQuery.toLowerCase())
+  ).slice(0, 8)
+
+  function handleInputChange(val: string) {
+    setInput(val)
+    const lastSlash = val.lastIndexOf('/')
+    if (lastSlash !== -1) {
+      const query = val.slice(lastSlash + 1)
+      if (!query.includes(' ')) { setAcQuery(query); setShowAutocomplete(true); setAcIndex(0); return }
+    }
+    setShowAutocomplete(false)
+  }
+
+  function insertFileRef(file: ProjectFile) {
+    const lastSlash = input.lastIndexOf('/')
+    setInput(`${lastSlash === -1 ? input : input.slice(0, lastSlash)}/${file.name} `)
+    setShowAutocomplete(false)
+    inputRef.current?.focus()
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showAutocomplete && acFiles.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setAcIndex(i => Math.min(i + 1, acFiles.length - 1)); return }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setAcIndex(i => Math.max(i - 1, 0)); return }
+      if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); insertFileRef(acFiles[acIndex]); return }
+      if (e.key === 'Escape') { setShowAutocomplete(false); return }
+    }
+    if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete) sendMessage()
+  }
+
+  // ── Send message ──────────────────────────────────────────────────────────
   async function sendMessage(text?: string) {
     const msgText = (text ?? input).trim()
     if (!msgText || isStreaming) return
     setInput(''); setShowAutocomplete(false)
 
-    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: msgText, timestamp: new Date().toISOString() }
-    const updated = [...messages, userMsg]
-    setMessages(updated)
-    setIsStreaming(true)
+    // Ensure an active thread exists
+    let threadId  = activeThreadId
+    let baseData  = data
+    if (!threadId) {
+      const { thread, updatedData } = buildNewThread()
+      threadId = thread.id
+      baseData = updatedData
+      setActiveThreadId(threadId)
+    }
 
-    const aId = crypto.randomUUID()
-    setMessages(prev => [...prev, { id: aId, role: 'assistant', content: '', timestamp: new Date().toISOString() }])
+    // Write user message to thread
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(), role: 'user',
+      content: msgText, timestamp: new Date().toISOString(),
+    }
+    const dataWithUser = {
+      ...baseData,
+      threads: (baseData.threads ?? []).map(t =>
+        t.id === threadId
+          ? { ...t, messages: [...t.messages, userMsg], updatedAt: userMsg.timestamp }
+          : t
+      ),
+    }
+    setData(dataWithUser)
+    setIsStreaming(true)
+    setStreamingContent('')
+
+    // History for the API = everything in this thread (including the new user msg)
+    const historyMsgs = dataWithUser.threads
+      .find(t => t.id === threadId)!.messages
+      .map(m => ({ role: m.role, content: m.content }))
+
+    let assistantContent = ''
 
     try {
       const res = await fetch('/api/ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updated.map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({ messages: historyMsgs }),
       })
       if (!res.ok) throw new Error(await res.text())
       if (!res.body) throw new Error('No response body')
@@ -609,91 +687,157 @@ export default function Assistant() {
           if (!t || t === 'data: [DONE]' || !t.startsWith('data: ')) continue
           try {
             const j = JSON.parse(t.slice(6))
-            if (j.delta) setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: m.content + j.delta } : m))
+            if (j.delta) { assistantContent += j.delta; setStreamingContent(assistantContent) }
             if (j.error) throw new Error(j.error)
-          } catch { /* ignore malformed */ }
+          } catch { /* skip malformed */ }
         }
       }
     } catch (e: any) {
-      setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: `Error: ${e.message}` } : m))
+      assistantContent = `Error: ${(e as Error).message}`
+      setStreamingContent(assistantContent)
     } finally {
+      // Commit assistant message to thread
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(), role: 'assistant',
+        content: assistantContent, timestamp: new Date().toISOString(),
+      }
+      setData({
+        ...dataWithUser,
+        threads: dataWithUser.threads.map(t =>
+          t.id === threadId
+            ? { ...t, messages: [...t.messages, assistantMsg], updatedAt: assistantMsg.timestamp }
+            : t
+        ),
+      })
+      setStreamingContent(null)
       setIsStreaming(false)
     }
   }
 
+  // ── Thread list sidebar ───────────────────────────────────────────────────
+  const groups = groupThreads(threads)
+
+  function ThreadRow({ thread }: { thread: ChatThread }) {
+    const isActive = thread.id === activeThreadId
+    const [hovered, setHovered] = useState(false)
+    return (
+      <div
+        onClick={() => { setActiveThreadId(thread.id); setStreamingContent(null) }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
+          background: isActive ? 'rgba(56,189,248,0.07)' : hovered ? 'rgba(148,163,184,0.04)' : 'transparent',
+          borderLeft: `2px solid ${isActive ? 'var(--sky)' : 'transparent'}`,
+          display: 'flex', flexDirection: 'column', gap: 2,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {threadTypeIcon(thread.type)}
+          <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? 'var(--text-1)' : 'var(--text-2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {thread.title}
+          </span>
+          {hovered && (
+            <button
+              onClick={e => { e.stopPropagation(); pinThread(thread.id) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: thread.pinned ? 'var(--amber)' : 'var(--text-3)', flexShrink: 0 }}
+              title={thread.pinned ? 'Unpin' : 'Pin'}
+            >
+              <Pin size={10} />
+            </button>
+          )}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', paddingLeft: 16 }}>
+          {dayjs(thread.updatedAt).format(dayjs(thread.updatedAt).isSame(dayjs(), 'day') ? 'HH:mm' : 'D MMM')}
+          {' · '}{thread.messages.length} msg{thread.messages.length !== 1 ? 's' : ''}
+        </div>
+      </div>
+    )
+  }
+
+  function ThreadGroup({ label, threads: group }: { label: string; threads: ChatThread[] }) {
+    if (group.length === 0) return null
+    return (
+      <div>
+        <div style={{ padding: '8px 10px 4px', fontSize: 9, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+          {label}
+        </div>
+        {group.map(t => <ThreadRow key={t.id} thread={t} />)}
+      </div>
+    )
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
-      {/* File library */}
-      <div style={{ width: 280, flexShrink: 0, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 14px 10px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>File Repository</div>
-          <div
-            onDrop={onFileDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}
-            style={{ border: '1.5px dashed var(--border-2)', borderRadius: 'var(--radius-sm)', padding: 12, textAlign: 'center', cursor: 'pointer', background: 'var(--card)', transition: 'all 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--sky)')}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-2)')}>
-            {uploading ? <Loader2 size={16} style={{ color: 'var(--sky)', margin: '0 auto' }} className="animate-spin" /> : <Upload size={16} style={{ color: 'var(--text-3)', margin: '0 auto 4px' }} />}
-            <div style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>{uploading ? 'Uploading and classifying...' : 'Drop file or click'}</div>
-          </div>
-          <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]) }} />
+      {/* ── Thread list sidebar ──────────────────────────────────────────── */}
+      <div style={{ width: 220, flexShrink: 0, background: 'var(--surface)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '14px 10px 10px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Assistant</div>
+          <button
+            onClick={createAndSelectThread}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.25)', borderRadius: 'var(--radius-sm)', padding: '7px 10px', color: 'var(--sky-bright)', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font-main)' }}
+          >
+            <Plus size={11} /> New Thread
+          </button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {data.projectFiles.length === 0 && <div style={{ padding: 16, fontSize: 12, color: 'var(--text-3)', textAlign: 'center', fontWeight: 600 }}>No files yet. Upload documents, meeting notes, or transcripts.</div>}
-          {Object.values(fileTree.children)
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map(node => (
-              <FolderNode
-                key={node.path}
-                node={node}
-                depth={0}
-                collapsed={collapsed}
-                toggleCollapse={toggleCollapse}
-                onDelete={storageName => deleteFile(storageName)}
-                onPreview={file => setPreviewFile(file)}
-              />
-            ))
-          }
-          {/* Root-level files (no folder assigned) */}
-          {fileTree.files.sort((a, b) => a.name.localeCompare(b.name)).map(f => (
-            <FileLeaf
-              key={f.id}
-              file={f}
-              depth={0}
-              onDelete={() => deleteFile(f.storageName)}
-              onPreview={() => setPreviewFile(f)}
-            />
-          ))}
-        </div>
-
-        <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, fontWeight: 600 }}>
-          Type / in chat to reference a file. Click a file to preview it. Click a folder to collapse or expand it.
+          {threads.length === 0 && (
+            <div style={{ padding: '20px 12px', fontSize: 11, color: 'var(--text-3)', textAlign: 'center', lineHeight: 1.6 }}>
+              No threads yet.<br />Start a conversation or wait for a check-in.
+            </div>
+          )}
+          <ThreadGroup label="Pinned" threads={groups.pinned} />
+          <ThreadGroup label="Today"     threads={groups.today} />
+          <ThreadGroup label="Yesterday" threads={groups.yesterday} />
+          <ThreadGroup label="Earlier"   threads={groups.earlier} />
         </div>
       </div>
 
-      {/* Chat */}
+      {/* ── Chat panel ───────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Bot size={16} style={{ color: 'var(--sky-bright)' }} />
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-1)' }}>Project Assistant</div>
-            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Live project data always in context · Type / to reference an uploaded file</div>
+
+        {/* Header */}
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <Bot size={15} style={{ color: 'var(--sky-bright)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {activeThread ? activeThread.title : 'Project Assistant'}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
+              Live project data in context · type / to reference a file
+            </div>
           </div>
-          {messages.length > 0 && <button className="btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setMessages([])}><X size={11} /> Clear</button>}
+          {activeThread && (
+            <button className="btn-ghost btn-sm" onClick={() => deleteThread(activeThread.id)} style={{ color: 'var(--text-3)' }}>
+              <Trash2 size={11} />
+            </button>
+          )}
+          <button
+            onClick={() => setShowFiles(s => !s)}
+            className="btn-ghost btn-sm"
+            style={{ color: showFiles ? 'var(--sky-bright)' : 'var(--text-3)', background: showFiles ? 'rgba(56,189,248,0.1)' : 'transparent' }}
+            title="Toggle file repository"
+          >
+            <FileStack size={13} />
+          </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-          {messages.length === 0 && (
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
+          {displayMessages.length === 0 && streamingContent === null && (
             <div>
               <div style={{ textAlign: 'center', marginBottom: 28 }}>
                 <Bot size={36} style={{ color: 'var(--sky-bright)', margin: '0 auto 12px' }} />
                 <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-1)', marginBottom: 6 }}>How can I help with the program?</div>
-                <div style={{ fontSize: 13, color: 'var(--text-3)' }}>I have access to all live project data. Type / to reference an uploaded file.</div>
+                <div style={{ fontSize: 13, color: 'var(--text-3)' }}>I have access to all live project data. Type / to reference a file.</div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 600, margin: '0 auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 580, margin: '0 auto' }}>
                 {SUGGESTED_PROMPTS.map(p => (
-                  <button key={p} onClick={() => sendMessage(p)} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', fontFamily: 'var(--font-main)' }}
+                  <button key={p} onClick={() => sendMessage(p)}
+                    style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s', fontSize: 12, fontWeight: 600, color: 'var(--text-2)', fontFamily: 'var(--font-main)' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--sky)'; e.currentTarget.style.color = 'var(--text-1)' }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-2)' }}>
                     {p}
@@ -702,14 +846,27 @@ export default function Assistant() {
               </div>
             </div>
           )}
-          {messages.map(m => <Message key={m.id} msg={m} sows={data.sows} onRefileConfirm={reloadData} />)}
+
+          {displayMessages.map(m => (
+            <Message key={m.id} msg={m} sows={data.sows} onRefileConfirm={reloadData} />
+          ))}
+
+          {/* Streaming assistant message */}
+          {streamingContent !== null && (
+            <Message
+              msg={{ id: '__streaming__', role: 'assistant', content: streamingContent || '…', timestamp: new Date().toISOString() }}
+              sows={data.sows}
+              onRefileConfirm={reloadData}
+            />
+          )}
+
           <div ref={chatEndRef} />
         </div>
 
         {/* Input + autocomplete */}
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', position: 'relative' }}>
+        <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', position: 'relative', flexShrink: 0 }}>
           {showAutocomplete && acFiles.length > 0 && (
-            <div style={{ position: 'absolute', bottom: '100%', left: 20, right: 70, background: 'var(--surface)', border: '1.5px solid var(--border-2)', borderRadius: 'var(--radius-sm)', marginBottom: 6, boxShadow: '0 -8px 24px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 10 }}>
+            <div style={{ position: 'absolute', bottom: '100%', left: 18, right: 66, background: 'var(--surface)', border: '1.5px solid var(--border-2)', borderRadius: 'var(--radius-sm)', marginBottom: 6, boxShadow: '0 -8px 24px rgba(0,0,0,0.4)', overflow: 'hidden', zIndex: 10 }}>
               {acFiles.map((f, i) => (
                 <div key={f.id} onClick={() => insertFileRef(f)} onMouseEnter={() => setAcIndex(i)}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', cursor: 'pointer', background: i === acIndex ? 'rgba(56,189,248,0.1)' : 'transparent', borderBottom: i < acFiles.length - 1 ? '1px solid var(--border)' : 'none' }}>
@@ -730,12 +887,12 @@ export default function Assistant() {
             </div>
           )}
           {showAutocomplete && acFiles.length === 0 && (
-            <div style={{ position: 'absolute', bottom: '100%', left: 20, right: 70, background: 'var(--surface)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', marginBottom: 6, padding: '10px 14px', fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>
+            <div style={{ position: 'absolute', bottom: '100%', left: 18, right: 66, background: 'var(--surface)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', marginBottom: 6, padding: '10px 14px', fontSize: 12, color: 'var(--text-3)', fontWeight: 600 }}>
               No files match "{acQuery}"
             </div>
           )}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input ref={inputRef} className="field-input" placeholder="Ask anything... or type / to reference a file"
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input ref={inputRef} className="field-input" placeholder="Ask anything… or type / to reference a file"
               value={input} onChange={e => handleInputChange(e.target.value)} onKeyDown={handleKeyDown}
               disabled={isStreaming} style={{ flex: 1 }} />
             <button className="btn-primary" onClick={() => sendMessage()} disabled={isStreaming || !input.trim()} style={{ opacity: isStreaming || !input.trim() ? 0.4 : 1 }}>
@@ -744,6 +901,43 @@ export default function Assistant() {
           </div>
         </div>
       </div>
+
+      {/* ── File repository (right toggle panel) ─────────────────────────── */}
+      {showFiles && (
+        <div style={{ width: 280, flexShrink: 0, background: 'var(--surface)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '14px 12px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>File Repository</div>
+            <button className="icon-btn" onClick={() => setShowFiles(false)} style={{ color: 'var(--text-3)' }}><X size={13} /></button>
+          </div>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+            <div
+              onDrop={onFileDrop} onDragOver={e => e.preventDefault()} onClick={() => fileInputRef.current?.click()}
+              style={{ border: '1.5px dashed var(--border-2)', borderRadius: 'var(--radius-sm)', padding: 10, textAlign: 'center', cursor: 'pointer', background: 'var(--card)' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--sky)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-2)')}>
+              {uploading ? <Loader2 size={14} style={{ color: 'var(--sky)', margin: '0 auto' }} className="animate-spin" /> : <Upload size={14} style={{ color: 'var(--text-3)', margin: '0 auto 4px' }} />}
+              <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>{uploading ? 'Uploading…' : 'Drop file or click'}</div>
+            </div>
+            <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={e => { if (e.target.files?.[0]) handleUpload(e.target.files[0]) }} />
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {data.projectFiles.length === 0 && (
+              <div style={{ padding: 14, fontSize: 11, color: 'var(--text-3)', textAlign: 'center', fontWeight: 600 }}>No files yet.</div>
+            )}
+            {Object.values(fileTree.children).sort((a, b) => a.name.localeCompare(b.name)).map(node => (
+              <FolderNode key={node.path} node={node} depth={0} collapsed={collapsed} toggleCollapse={toggleCollapse}
+                onDelete={storageName => deleteFile(storageName)} onPreview={file => setPreviewFile(file)} />
+            ))}
+            {fileTree.files.sort((a, b) => a.name.localeCompare(b.name)).map(f => (
+              <FileLeaf key={f.id} file={f} depth={0}
+                onDelete={() => deleteFile(f.storageName)} onPreview={() => setPreviewFile(f)} />
+            ))}
+          </div>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', fontSize: 9, color: 'var(--text-3)', fontWeight: 600 }}>
+            Type / in chat to reference · click to preview
+          </div>
+        </div>
+      )}
 
       {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
     </div>
