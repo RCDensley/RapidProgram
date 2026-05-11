@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useApp } from '../App'
-import { SOW, Phase, PhaseName, BudgetSource, MilestoneInvoice, PHASE_COLORS } from '../types'
+import { SOW, Phase, PhaseName, BudgetSource, MilestoneInvoice, PHASE_COLORS, PhaseCriterion } from '../types'
 import { sowTotalBudget } from '../utils/calculations'
 import { v4 as uuidv4 } from 'uuid'
 import { Plus, Pencil, Trash2, Save, CheckCircle2, Circle } from 'lucide-react'
@@ -13,6 +13,88 @@ const SOURCE_COLORS = [
   '#38bdf8', '#818cf8', '#a78bfa', '#34d399', '#fb923c',
   '#f87171', '#fbbf24', '#e879f9', '#94a3b8',
 ]
+
+// ─── Phase exit criteria editor ───────────────────────────────────────────────
+function PhaseCriteriaEditor({ phase, phaseColor, onAdd, onToggle, onEdit, onDelete }: {
+  phase: Phase
+  phaseColor: string
+  onAdd:    (text: string) => void
+  onToggle: (id: string) => void
+  onEdit:   (id: string, text: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [input, setInput] = useState('')
+  const criteria = phase.criteria ?? []
+  const doneCount = criteria.filter(c => c.done).length
+
+  function add() {
+    const t = input.trim()
+    if (!t) return
+    onAdd(t)
+    setInput('')
+  }
+
+  return (
+    <div style={{ marginLeft: 24, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+        Exit Criteria
+        {criteria.length > 0 && (
+          <span style={{ fontWeight: 600, marginLeft: 6, color: doneCount === criteria.length ? phaseColor : 'var(--text-3)' }}>
+            {doneCount}/{criteria.length}
+          </span>
+        )}
+      </div>
+
+      {criteria.map(c => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <input
+            type="checkbox"
+            checked={c.done}
+            onChange={() => onToggle(c.id)}
+            style={{ accentColor: phaseColor, width: 13, height: 13, flexShrink: 0, cursor: 'pointer' }}
+          />
+          <input
+            className="field-input"
+            defaultValue={c.text}
+            onBlur={e => { if (e.target.value.trim()) onEdit(c.id, e.target.value.trim()) }}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            style={{
+              flex: 1, fontSize: 12, padding: '2px 6px',
+              color: c.done ? 'var(--text-3)' : 'var(--text-1)',
+              textDecoration: c.done ? 'line-through' : 'none',
+              background: 'transparent', border: '1px solid transparent',
+            }}
+            onFocus={e => (e.target.style.borderColor = 'var(--border-2)')}
+            onBlurCapture={e => (e.target.style.borderColor = 'transparent')}
+          />
+          <button
+            className="icon-btn"
+            style={{ color: 'var(--text-3)', opacity: 0.5, flexShrink: 0 }}
+            onClick={() => onDelete(c.id)}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--red)' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-3)' }}
+          >
+            <Trash2 size={9} />
+          </button>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+        <input
+          className="field-input field-input-sm"
+          placeholder="Add exit criterion…"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          style={{ flex: 1, fontSize: 11 }}
+        />
+        <button className="btn-ghost btn-sm" onClick={add} disabled={!input.trim()}>
+          <Plus size={11} />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ─── SE-1: MonthHalfPicker ────────────────────────────────────────────────────
 // Replaces <input type="date"> everywhere in Settings.
@@ -301,6 +383,36 @@ export default function Settings() {
     })
   }
 
+  function addCriterion(sowId: string, phaseId: string, text: string) {
+    const phase = data.sows.find(s => s.id === sowId)!.phases.find(p => p.id === phaseId)!
+    const c: PhaseCriterion = { id: uuidv4(), text, done: false }
+    updatePhase(sowId, { ...phase, criteria: [...(phase.criteria ?? []), c] })
+  }
+
+  function toggleCriterion(sowId: string, phaseId: string, criterionId: string) {
+    const phase = data.sows.find(s => s.id === sowId)!.phases.find(p => p.id === phaseId)!
+    updatePhase(sowId, {
+      ...phase,
+      criteria: (phase.criteria ?? []).map(c => c.id === criterionId ? { ...c, done: !c.done } : c),
+    })
+  }
+
+  function editCriterion(sowId: string, phaseId: string, criterionId: string, text: string) {
+    const phase = data.sows.find(s => s.id === sowId)!.phases.find(p => p.id === phaseId)!
+    updatePhase(sowId, {
+      ...phase,
+      criteria: (phase.criteria ?? []).map(c => c.id === criterionId ? { ...c, text } : c),
+    })
+  }
+
+  function deleteCriterion(sowId: string, phaseId: string, criterionId: string) {
+    const phase = data.sows.find(s => s.id === sowId)!.phases.find(p => p.id === phaseId)!
+    updatePhase(sowId, {
+      ...phase,
+      criteria: (phase.criteria ?? []).filter(c => c.id !== criterionId),
+    })
+  }
+
   function deletePhase(sowId: string, phaseId: string) {
     updateSOW(sowId, {
       phases: data.sows.find(s => s.id === sowId)!.phases.filter(p => p.id !== phaseId)
@@ -358,34 +470,43 @@ export default function Settings() {
                 </button>
               </div>
               {sow.phases.map(phase => (
-                <div key={phase.id} className="phase-row" style={{ alignItems: 'center', gap: 10 }}>
-                  <div className="phase-dot" style={{ background: PHASE_COLORS[phase.name] }} />
-                  <select
-                    className="field-input field-input-sm"
-                    style={{ width: 110, flexShrink: 0 }}
-                    value={phase.name}
-                    onChange={e => updatePhase(sow.id, { ...phase, name: e.target.value as PhaseName })}
-                  >
-                    {PHASE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
-                  {/* SE-1: MonthHalfPicker instead of date input */}
-                  <MonthHalfPicker
-                    value={phase.startDate}
-                    onChange={v => updatePhase(sow.id, { ...phase, startDate: v })}
-                    monthStart={sow.startDate.slice(0, 7)}
-                    monthEnd={sow.endDate.slice(0, 7)}
+                <div key={phase.id} style={{ marginBottom: 8, background: 'var(--card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', padding: '8px 10px' }}>
+                  <div className="phase-row" style={{ alignItems: 'center', gap: 10, marginBottom: 0 }}>
+                    <div className="phase-dot" style={{ background: PHASE_COLORS[phase.name] }} />
+                    <select
+                      className="field-input field-input-sm"
+                      style={{ width: 110, flexShrink: 0 }}
+                      value={phase.name}
+                      onChange={e => updatePhase(sow.id, { ...phase, name: e.target.value as PhaseName })}
+                    >
+                      {PHASE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <MonthHalfPicker
+                      value={phase.startDate}
+                      onChange={v => updatePhase(sow.id, { ...phase, startDate: v })}
+                      monthStart={sow.startDate.slice(0, 7)}
+                      monthEnd={sow.endDate.slice(0, 7)}
+                    />
+                    <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>→</span>
+                    <MonthHalfPicker
+                      value={phase.endDate}
+                      onChange={v => updatePhase(sow.id, { ...phase, endDate: v })}
+                      monthStart={sow.startDate.slice(0, 7)}
+                      monthEnd={sow.endDate.slice(0, 7)}
+                    />
+                    <button className="icon-btn" style={{ color: 'var(--red)', flexShrink: 0, marginLeft: 'auto' }}
+                      onClick={() => deletePhase(sow.id, phase.id)}>
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                  <PhaseCriteriaEditor
+                    phase={phase}
+                    phaseColor={PHASE_COLORS[phase.name]}
+                    onAdd={text  => addCriterion(sow.id, phase.id, text)}
+                    onToggle={id => toggleCriterion(sow.id, phase.id, id)}
+                    onEdit={(id, text) => editCriterion(sow.id, phase.id, id, text)}
+                    onDelete={id => deleteCriterion(sow.id, phase.id, id)}
                   />
-                  <span style={{ color: 'var(--text-3)', flexShrink: 0 }}>→</span>
-                  <MonthHalfPicker
-                    value={phase.endDate}
-                    onChange={v => updatePhase(sow.id, { ...phase, endDate: v })}
-                    monthStart={sow.startDate.slice(0, 7)}
-                    monthEnd={sow.endDate.slice(0, 7)}
-                  />
-                  <button className="icon-btn" style={{ color: 'var(--red)', flexShrink: 0 }}
-                    onClick={() => deletePhase(sow.id, phase.id)}>
-                    <Trash2 size={11} />
-                  </button>
                 </div>
               ))}
             </div>

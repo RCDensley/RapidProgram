@@ -220,3 +220,4 @@ _Add entries here as issues are completed. Note anything surprising, any pattern
 | Date | Issue | Learning |
 |---|---|---|
 | 2026-05-11 | #1 | `criteria?: PhaseCriterion[]` optional field — no defaultData change needed. All consumers must use `phase.criteria ?? []`. Pattern mirrors `pricingType?` on SOW. |
+| 2026-05-11 | #2 | `PhaseCriteriaEditor` is a self-contained component with local `input` state for the add field. Text editing uses `defaultValue` + `onBlur` (not `value` + `onChange`) to avoid a blob write per keystroke. Each phase row is now wrapped in a card `div` (`var(--card)` background) to visually separate phases and give the criteria section a clean home. |

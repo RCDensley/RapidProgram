@@ -27,7 +27,7 @@ Add `PhaseCriterion` interface and `criteria` field to `Phase` — the type foun
 ---
 
 ### Issue 2 · Phase exit criteria — Settings UI
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #1
 
 Edit and tick off exit criteria per phase, inline in the existing Settings SOW section.
