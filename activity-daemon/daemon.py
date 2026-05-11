@@ -14,6 +14,7 @@ from pathlib import Path
 import requests
 from capture.apps import AppTracker, POLL_INTERVAL
 from capture.audio import AudioTracker
+from capture.screen import screen_entry, CAPTURE_INTERVAL as SCREEN_INTERVAL
 from uploader import upload_batch
 from notifier import notify_checkin
 
@@ -77,11 +78,19 @@ def main():
     def do_sample():
         tracker.sample()
 
+    # Screen capture entries collected here and appended at flush time
+    _pending_screen: list[dict] = []
+
+    def do_screen_capture():
+        entry = screen_entry(api_url, daemon_key)
+        if entry:
+            _pending_screen.append(entry)
+
     def do_flush():
-        app_entries   = tracker.flush()
-        audio_entries = audio_tracker.flush()   # empty list if audio disabled
-        # Screen context entries appended here in Issue 18
-        upload_batch(api_url, daemon_key, app_entries + audio_entries)
+        app_entries    = tracker.flush()
+        audio_entries  = audio_tracker.flush()
+        screen_entries = list(_pending_screen); _pending_screen.clear()
+        upload_batch(api_url, daemon_key, app_entries + audio_entries + screen_entries)
 
     # ── Hourly check-in ───────────────────────────────────────────────────────
     checkin_mins   = config.get('check_in_interval_minutes', 60)
@@ -114,6 +123,9 @@ def main():
 
     # Flush and upload every batch_interval_minutes
     schedule.every(batch_mins).minutes.do(do_flush)
+
+    # Screen capture every CAPTURE_INTERVAL seconds (default 10 min)
+    schedule.every(SCREEN_INTERVAL).seconds.do(do_screen_capture)
 
     # Trigger check-in every check_in_interval_minutes
     schedule.every(checkin_mins).minutes.do(do_checkin)

@@ -386,7 +386,7 @@ Mic → silero-vad filter → Whisper small → transcript chunks added to activ
 ---
 
 ### Issue 18 · Python daemon — screen capture & AI visual tagging
-**System:** Python Daemon · **Status:** `[ ]`
+**System:** Python Daemon · **Status:** `[x]`
 **Depends on:** #13, #14
 
 Screenshot every 10 min → AI describes what's on screen → text description stored in batch (no raw image stored).
