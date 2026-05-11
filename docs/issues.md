@@ -410,7 +410,7 @@ Screenshot every 10 min → AI describes what's on screen → text description s
 ## Phase 6 — Timesheet Generator
 
 ### Issue 19 · Timesheet generator — weekly activity rollup
-**System:** PMTracking (API) · **Status:** `[ ]`
+**System:** PMTracking (API) · **Status:** `[-]` *(deferred — Assistant chat handles this)*
 **Depends on:** #9, #10, #11
 
 `POST /api/timesheet/generate` reads Mon–Fri activity logs, uses AI to map to SOW project codes, saves draft to blob.
@@ -432,7 +432,7 @@ Screenshot every 10 min → AI describes what's on screen → text description s
 ---
 
 ### Issue 20 · Timesheet generator — review UI
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[-]` *(deferred — Assistant chat handles this)*
 **Depends on:** #5, #19
 
 Editable draft table in Timesheets view. Week picker, Generate button, editable rows.
@@ -454,7 +454,7 @@ Editable draft table in Timesheets view. Week picker, Generate button, editable 
 ---
 
 ### Issue 21 · Timesheet generator — CSV export
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[-]` *(deferred — Assistant chat handles this)*
 **Depends on:** #19, #20
 
 Export reviewed draft as ConnectWise-format CSV that can be re-imported via the existing Timesheets import flow.
