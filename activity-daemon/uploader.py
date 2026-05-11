@@ -8,8 +8,11 @@ and retried on the next flush.
 import json
 import logging
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+# Melbourne / AEST+11 (AEDT) — local time used for all display timestamps
+_LOCAL_TZ = datetime.now().astimezone().tzinfo
 
 log = logging.getLogger('uploader')
 
@@ -18,10 +21,10 @@ MAX_PENDING_AGE_HOURS = 24
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    return datetime.now().strftime('%Y-%m-%d')
 
 def _now_time() -> str:
-    return datetime.now(timezone.utc).strftime('%H:%M')
+    return datetime.now().strftime('%H:%M')
 
 
 def upload_batch(api_url: str, daemon_key: str, entries: list[dict]) -> bool:
@@ -121,8 +124,7 @@ def _drain_queue(api_url: str, daemon_key: str):
 
 def _is_stale(date_str: str, cutoff_ts: float) -> bool:
     try:
-        from datetime import datetime
-        dt = datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        dt = datetime.strptime(date_str, '%Y-%m-%d')
         return dt.timestamp() < cutoff_ts
     except Exception:
         return True

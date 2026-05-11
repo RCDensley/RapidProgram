@@ -6,7 +6,7 @@ consecutive identical windows into ActivityEntry records.
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from dataclasses import dataclass, field
 
 log = logging.getLogger('capture.apps')
@@ -47,7 +47,7 @@ def get_active_window() -> dict | None:
         return {
             'appName':     app_name,
             'windowTitle': title,
-            'timestamp':   datetime.now(timezone.utc).isoformat(),
+            'timestamp':   datetime.now().isoformat(timespec='seconds'),
         }
     except Exception as e:
         log.debug(f'get_active_window error: {e}')
@@ -102,7 +102,7 @@ class AppTracker:
         entries = []
         for s in self._completed:
             entries.append({
-                'timestamp':       datetime.now(timezone.utc).isoformat(),
+                'timestamp':       datetime.now().isoformat(timespec='seconds'),
                 'type':            'app_focus',
                 'durationSeconds': s.duration_seconds,
                 'appName':         s.app_name,

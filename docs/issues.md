@@ -319,7 +319,7 @@ Collect entries from all streams, POST to `/api/activity` every 15 min. Retry qu
 ---
 
 ### Issue 15 · Hourly check-in card — PM Tracker side
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #7, #8, #9, #11
 
 New `/api/checkin` endpoint: reads activity + project state, calls AI, saves result as a `checkin` thread. Assistant renders check-in threads with distinct styling and action buttons.
