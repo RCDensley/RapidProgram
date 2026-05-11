@@ -1,6 +1,14 @@
 {
   "routes": [
     {
+      "route": "/api/activity",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/checkin",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/*",
       "allowedRoles": ["authenticated"]
     }
