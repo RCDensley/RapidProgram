@@ -14,6 +14,7 @@ import {
   AlertTriangle, Info, X, Users, Calendar, ChevronRight, Lock, Eye,
 } from 'lucide-react'
 import { PHASE_COLORS } from '../types'
+import { Circle } from 'lucide-react'
 import dayjs from 'dayjs'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -396,7 +397,7 @@ function BurndownChart({ sow, data: chartData, timeEntries, view, onViewChange }
 
 // ─── Main dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { data } = useApp()
+  const { data, setData } = useApp()
   const summary = getProgramSummary(data)
   const today   = dayjs().format('D MMM YYYY')
 
@@ -666,6 +667,62 @@ export default function Dashboard() {
                   })}
                 </div>
               </div>
+
+              {/* Exit criteria for current phase */}
+              {currentPhase && (currentPhase.criteria ?? []).length > 0 && (() => {
+                const phase_    = currentPhase    // narrowed non-null const for TS
+                const criteria  = phase_.criteria!
+                const doneCount = criteria.filter(c => c.done).length
+                const phaseColor = PHASE_COLORS[phase_.name]
+                const allDone   = doneCount === criteria.length
+
+                function toggleCriterion(criterionId: string) {
+                  const updatedSow = {
+                    ...selectedSow!,
+                    phases: selectedSow!.phases.map(p =>
+                      p.id === phase_.id
+                        ? { ...p, criteria: (p.criteria ?? []).map(c => c.id === criterionId ? { ...c, done: !c.done } : c) }
+                        : p
+                    ),
+                  }
+                  setData({ ...data, sows: data.sows.map(s => s.id === selectedSow!.id ? updatedSow : s) })
+                }
+
+                return (
+                  <div style={{ background: 'var(--card)', border: `1px solid ${phaseColor}33`, borderLeft: `3px solid ${phaseColor}`, borderRadius: 'var(--radius)', padding: '14px 18px', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <h3 style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <CheckCircle2 size={12} style={{ color: allDone ? phaseColor : 'var(--text-3)' }} />
+                        {phase_.name} — Exit Criteria
+                      </h3>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: allDone ? phaseColor : 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                        {doneCount}/{criteria.length}
+                      </span>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(doneCount / criteria.length) * 100}%`, background: phaseColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {criteria.map(c => (
+                        <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={c.done}
+                            onChange={() => toggleCriterion(c.id)}
+                            style={{ accentColor: phaseColor, width: 13, height: 13, flexShrink: 0, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 12, color: c.done ? 'var(--text-3)' : 'var(--text-1)', textDecoration: c.done ? 'line-through' : 'none', lineHeight: 1.4 }}>
+                            {c.text}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Two-column: team + budget */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

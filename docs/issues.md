@@ -50,7 +50,7 @@ Edit and tick off exit criteria per phase, inline in the existing Settings SOW s
 ---
 
 ### Issue 3 · Phase exit criteria — Dashboard surface
-**System:** PMTracking · **Status:** `[ ]`
+**System:** PMTracking · **Status:** `[x]`
 **Depends on:** #1, #2
 
 Show current-phase exit criteria directly on the Dashboard per-SOW panel (read + write).
