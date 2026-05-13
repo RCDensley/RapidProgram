@@ -98,8 +98,12 @@ class AudioTracker:
                     # silero-vad: is this chunk speech?
                     tensor = torch.from_numpy(audio)
                     try:
-                        prob = self._vad_model(tensor, SAMPLE_RATE).item()
-                    except Exception:
+                        out  = self._vad_model(tensor, SAMPLE_RATE)
+                        # silero-vad may return a scalar or a multi-element tensor
+                        # (one value per analysis window) depending on chunk size.
+                        prob = out.mean().item()
+                    except Exception as e:
+                        log.debug(f'VAD error: {e}')
                         continue
 
                     if prob >= SPEECH_THRESHOLD:
