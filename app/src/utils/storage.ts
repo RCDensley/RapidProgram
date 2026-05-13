@@ -31,23 +31,11 @@ export async function loadData(): Promise<AppData> {
 }
 
 export async function saveData(data: AppData): Promise<void> {
-  // Merge server-created threads (e.g. check-in cards) that the local state
-  // may not know about, so they aren't silently overwritten on every save.
-  let threads = data.threads ?? []
-  try {
-    const peek = await fetch(`${API_BASE}/data`)
-    if (peek.ok) {
-      const serverJson = await peek.json()
-      const serverThreads: any[] = serverJson.threads ?? []
-      const localIds = new Set(threads.map(t => t.id))
-      const newFromServer = serverThreads.filter((t: any) => !localIds.has(t.id))
-      if (newFromServer.length > 0) {
-        threads = [...newFromServer, ...threads]
-      }
-    }
-  } catch { /* keep local threads on network error */ }
-
-  const payload: AppData = { ...data, threads, lastUpdated: new Date().toISOString() }
+  // Note: no read-before-write merge here. The Assistant view polls reloadData()
+  // every 2 minutes to pick up server-created check-in threads. Merging on every
+  // save caused explicitly deleted threads to be immediately re-added from the
+  // server state before the deletion write had been committed.
+  const payload: AppData = { ...data, lastUpdated: new Date().toISOString() }
   const res = await fetch(`${API_BASE}/data`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
