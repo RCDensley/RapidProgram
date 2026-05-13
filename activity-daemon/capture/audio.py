@@ -89,6 +89,7 @@ class AudioTracker:
 
             with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='float32') as stream:
                 log.info('Microphone stream open')
+                in_speech = False   # tracks current speech/silence state for logging
                 while self._running:
                     # silero-vad requires exactly 512 samples at 16kHz (32ms per chunk)
                     chunk, _ = stream.read(VAD_SAMPLES)
@@ -102,20 +103,21 @@ class AudioTracker:
                         continue
 
                     if prob >= SPEECH_THRESHOLD:
-                        with self._lock:
-                            prev_len = len(self._speech_buffer)
-                            self._speech_buffer.append(audio)
-                        if prev_len == 0:
+                        if not in_speech:
                             log.debug('Speech started')
-                        # Each chunk = VAD_SAMPLES / SAMPLE_RATE seconds
-                        speech_secs = (prev_len + 1) * VAD_SAMPLES / SAMPLE_RATE
+                            in_speech = True
+                        with self._lock:
+                            self._speech_buffer.append(audio)
+                        speech_secs = len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE
                         if speech_secs >= TRANSCRIBE_SECS:
                             self._transcribe_buffer()
+                            in_speech = False
                     else:
-                        with self._lock:
-                            was_speaking = len(self._speech_buffer) > 0
-                        if was_speaking:
-                            log.debug(f'Speech ended (~{len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE:.1f}s accumulated)')
+                        if in_speech:
+                            with self._lock:
+                                secs = len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE
+                            log.debug(f'Speech ended (~{secs:.1f}s accumulated)')
+                            in_speech = False
 
         except Exception as e:
             log.warning(f'Audio capture loop stopped: {e}')
