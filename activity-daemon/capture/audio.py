@@ -18,7 +18,8 @@ log = logging.getLogger('capture.audio')
 
 SAMPLE_RATE      = 16000   # Hz — Whisper and silero-vad both require 16 kHz
 CHUNK_DURATION   = 1.5     # seconds per VAD chunk
-SPEECH_THRESHOLD = 0.60    # silero-vad probability above which we keep the chunk
+SPEECH_THRESHOLD = 0.45    # silero-vad probability above which we keep the chunk
+                            # (lowered from 0.6 — music + speech mix scores lower)
 TRANSCRIBE_SECS  = 30      # accumulate this many speech-seconds before transcribing
 MAX_TRANSCRIPT   = 600     # chars — truncate very long transcriptions
 
@@ -102,11 +103,14 @@ class AudioTracker:
                         continue
 
                     if prob >= SPEECH_THRESHOLD:
+                        log.debug(f'Speech chunk accepted (prob={prob:.2f})')
                         with self._lock:
                             self._speech_buffer.append(audio)
                         speech_secs = len(self._speech_buffer) * CHUNK_DURATION
                         if speech_secs >= TRANSCRIBE_SECS:
                             self._transcribe_buffer()
+                    else:
+                        log.debug(f'Chunk filtered (prob={prob:.2f})')
 
         except Exception as e:
             log.warning(f'Audio capture loop stopped: {e}')

@@ -23,6 +23,8 @@ logging.basicConfig(
     format='%(asctime)s  %(levelname)-8s  %(message)s',
     datefmt='%H:%M:%S',
 )
+# Temporarily DEBUG for audio to diagnose VAD filtering
+logging.getLogger('capture.audio').setLevel(logging.DEBUG)
 log = logging.getLogger('daemon')
 
 CONFIG_PATH = Path(__file__).parent / 'config.toml'
