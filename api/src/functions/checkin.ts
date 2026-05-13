@@ -34,12 +34,13 @@ function todayDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function checkinTitle(): string {
+function checkinTitle(localTitle?: string): string {
+  if (localTitle) return localTitle
+  // Fallback: server UTC time (only used if daemon doesn't send a title)
   const now = new Date()
-  const hh  = String(now.getHours()).padStart(2, '0')
-  const mm  = String(now.getMinutes()).padStart(2, '0')
-  const day = now.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
-  return `${hh}:${mm} Check-in · ${day}`
+  const hh  = String(now.getUTCHours()).padStart(2, '0')
+  const mm  = String(now.getUTCMinutes()).padStart(2, '0')
+  return `${hh}:${mm} Check-in (UTC)`
 }
 
 function buildCheckinPrompt(appData: any, activityBatches: any[]): string {
@@ -100,6 +101,9 @@ app.http('checkin', {
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
     if (!validateDaemonKey(req)) return { status: 401, body: 'Unauthorized' }
 
+    let localTitle: string | undefined
+    try { const body = await req.json() as any; localTitle = body?.title } catch { /* no body */ }
+
     try {
       const svc = getStorageClient()
 
@@ -125,7 +129,7 @@ app.http('checkin', {
       const thread = {
         id:        threadId,
         type:      'checkin',
-        title:     checkinTitle(),
+        title:     checkinTitle(localTitle),
         createdAt: now,
         updatedAt: now,
         messages: [

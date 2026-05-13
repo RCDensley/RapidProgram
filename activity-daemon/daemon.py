@@ -97,11 +97,15 @@ def main():
     assistant_url  = f'{api_url.rstrip("/")}/assistant'
 
     def do_checkin():
+        from datetime import datetime as _dt
+        _now = _dt.now()
+        local_title = f'{_now.strftime("%H:%M")} Check-in · {_now.day} {_now.strftime("%b")}'
         try:
             res = requests.post(
                 f'{api_url.rstrip("/")}/api/checkin',
+                json={'title': local_title},
                 headers={'X-Daemon-Key': daemon_key},
-                timeout=60,  # AI call can take a moment
+                timeout=60,
             )
             if res.status_code == 401:
                 log.error('Check-in rejected — check daemon_api_key in config.toml')
@@ -109,6 +113,7 @@ def main():
             if not res.ok:
                 log.warning(f'Check-in failed: HTTP {res.status_code}')
                 return
+            log.info(f'Check-in raw response ({res.status_code}): {res.text[:400]}')
             result  = res.json()
             title   = result.get('title', 'Check-in ready')
             log.info(f'Check-in created: {title}')
