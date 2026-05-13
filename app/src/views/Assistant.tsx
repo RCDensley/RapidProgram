@@ -419,7 +419,9 @@ function FileRow({ file, onDelete, onPreview }: { file: ProjectFile; onDelete: (
 }
 
 // ─── Chat message ─────────────────────────────────────────────────────────────
-function Message({ msg, sows, onRefileConfirm }: { msg: ChatMessage; sows: any[]; onRefileConfirm: () => void }) {
+// Memoised on message identity so reloadData() refreshing data.sows doesn't
+// remount Message and reset ActionCard state to 'idle'.
+const Message = React.memo(function Message({ msg, sows, onRefileConfirm }: { msg: ChatMessage; sows: any[]; onRefileConfirm: () => void }) {
   const isUser = msg.role === 'user'
   const [dismissed, setDismissed] = React.useState<Set<string>>(new Set())
 
@@ -482,7 +484,10 @@ function Message({ msg, sows, onRefileConfirm }: { msg: ChatMessage; sows: any[]
       </div>
     </div>
   )
-}
+},
+// Only re-render when message content actually changes — not on sows reference churn
+(prev, next) => prev.msg.id === next.msg.id && prev.msg.content === next.msg.content
+)
 
 // ─── Thread helpers ───────────────────────────────────────────────────────────
 function threadTypeIcon(type: ChatThread['type']) {
