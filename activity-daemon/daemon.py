@@ -19,14 +19,11 @@ from uploader import upload_batch
 from notifier import notify_checkin
 
 logging.basicConfig(
-    level=logging.DEBUG,   # allow DEBUG through the handler
+    level=logging.INFO,
     format='%(asctime)s  %(levelname)-8s  %(message)s',
     datefmt='%H:%M:%S',
 )
-# Keep noisy libraries quiet; only audio at DEBUG
-for _noisy in ('urllib3', 'requests', 'schedule', 'torch', 'numba', 'PIL'):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-logging.getLogger('capture.audio').setLevel(logging.DEBUG)
+logging.getLogger('capture.audio').setLevel(logging.DEBUG)  # speech start/end events only
 log = logging.getLogger('daemon')
 
 CONFIG_PATH = Path(__file__).parent / 'config.toml'

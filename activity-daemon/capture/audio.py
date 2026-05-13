@@ -102,15 +102,20 @@ class AudioTracker:
                         continue
 
                     if prob >= SPEECH_THRESHOLD:
-                        log.debug(f'Speech chunk accepted (prob={prob:.2f})')
                         with self._lock:
+                            prev_len = len(self._speech_buffer)
                             self._speech_buffer.append(audio)
+                        if prev_len == 0:
+                            log.debug('Speech started')
                         # Each chunk = VAD_SAMPLES / SAMPLE_RATE seconds
-                        speech_secs = len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE
+                        speech_secs = (prev_len + 1) * VAD_SAMPLES / SAMPLE_RATE
                         if speech_secs >= TRANSCRIBE_SECS:
                             self._transcribe_buffer()
                     else:
-                        log.debug(f'Chunk filtered (prob={prob:.2f})')
+                        with self._lock:
+                            was_speaking = len(self._speech_buffer) > 0
+                        if was_speaking:
+                            log.debug(f'Speech ended (~{len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE:.1f}s accumulated)')
 
         except Exception as e:
             log.warning(f'Audio capture loop stopped: {e}')
