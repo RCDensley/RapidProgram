@@ -17,9 +17,9 @@ from typing import Optional
 log = logging.getLogger('capture.audio')
 
 SAMPLE_RATE      = 16000   # Hz — Whisper and silero-vad both require 16 kHz
-CHUNK_DURATION   = 1.5     # seconds per VAD chunk
+VAD_SAMPLES      = 512     # silero-vad requires exactly 512 samples at 16kHz
+                            # (32ms per VAD check)
 SPEECH_THRESHOLD = 0.45    # silero-vad probability above which we keep the chunk
-                            # (lowered from 0.6 — music + speech mix scores lower)
 TRANSCRIBE_SECS  = 30      # accumulate this many speech-seconds before transcribing
 MAX_TRANSCRIPT   = 600     # chars — truncate very long transcriptions
 
@@ -87,21 +87,16 @@ class AudioTracker:
             import numpy as np
             import torch
 
-            chunk_samples = int(SAMPLE_RATE * CHUNK_DURATION)
-
             with sd.InputStream(samplerate=SAMPLE_RATE, channels=1, dtype='float32') as stream:
                 log.info('Microphone stream open')
                 while self._running:
-                    chunk, _ = stream.read(chunk_samples)
+                    # silero-vad requires exactly 512 samples at 16kHz (32ms per chunk)
+                    chunk, _ = stream.read(VAD_SAMPLES)
                     audio = chunk.flatten()
 
-                    # silero-vad: is this chunk speech?
                     tensor = torch.from_numpy(audio)
                     try:
-                        out  = self._vad_model(tensor, SAMPLE_RATE)
-                        # silero-vad may return a scalar or a multi-element tensor
-                        # (one value per analysis window) depending on chunk size.
-                        prob = out.mean().item()
+                        prob = self._vad_model(tensor, SAMPLE_RATE).item()
                     except Exception as e:
                         log.debug(f'VAD error: {e}')
                         continue
@@ -110,7 +105,8 @@ class AudioTracker:
                         log.debug(f'Speech chunk accepted (prob={prob:.2f})')
                         with self._lock:
                             self._speech_buffer.append(audio)
-                        speech_secs = len(self._speech_buffer) * CHUNK_DURATION
+                        # Each chunk = VAD_SAMPLES / SAMPLE_RATE seconds
+                        speech_secs = len(self._speech_buffer) * VAD_SAMPLES / SAMPLE_RATE
                         if speech_secs >= TRANSCRIBE_SECS:
                             self._transcribe_buffer()
                     else:
