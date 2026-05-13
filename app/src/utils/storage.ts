@@ -31,7 +31,23 @@ export async function loadData(): Promise<AppData> {
 }
 
 export async function saveData(data: AppData): Promise<void> {
-  const payload: AppData = { ...data, lastUpdated: new Date().toISOString() }
+  // Merge server-created threads (e.g. check-in cards) that the local state
+  // may not know about, so they aren't silently overwritten on every save.
+  let threads = data.threads ?? []
+  try {
+    const peek = await fetch(`${API_BASE}/data`)
+    if (peek.ok) {
+      const serverJson = await peek.json()
+      const serverThreads: any[] = serverJson.threads ?? []
+      const localIds = new Set(threads.map(t => t.id))
+      const newFromServer = serverThreads.filter((t: any) => !localIds.has(t.id))
+      if (newFromServer.length > 0) {
+        threads = [...newFromServer, ...threads]
+      }
+    }
+  } catch { /* keep local threads on network error */ }
+
+  const payload: AppData = { ...data, threads, lastUpdated: new Date().toISOString() }
   const res = await fetch(`${API_BASE}/data`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

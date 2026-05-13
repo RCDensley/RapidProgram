@@ -19,11 +19,13 @@ from uploader import upload_batch
 from notifier import notify_checkin
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,   # allow DEBUG through the handler
     format='%(asctime)s  %(levelname)-8s  %(message)s',
     datefmt='%H:%M:%S',
 )
-# Temporarily DEBUG for audio to diagnose VAD filtering
+# Keep noisy libraries quiet; only audio at DEBUG
+for _noisy in ('urllib3', 'requests', 'schedule', 'torch', 'numba', 'PIL'):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logging.getLogger('capture.audio').setLevel(logging.DEBUG)
 log = logging.getLogger('daemon')
 

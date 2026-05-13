@@ -535,6 +535,13 @@ export default function Assistant() {
 
   useEffect(() => { latestDataRef.current = data }, [data])
 
+  // Poll for server-created threads (e.g. check-in cards) every 2 minutes.
+  // reloadData() fetches fresh state without triggering a save.
+  useEffect(() => {
+    const id = setInterval(() => reloadData(), 2 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [reloadData])
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [displayMessages.length, streamingContent])
