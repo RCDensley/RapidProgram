@@ -78,6 +78,7 @@ export interface MilestoneInvoice {
   amount: number      // invoice amount ex GST
   date: string        // planned invoice date YYYY-MM-DD
   completed: boolean  // true once this milestone has been invoiced
+  completedDate?: string  // actual date invoice was raised/confirmed YYYY-MM-DD
 }
 
 // ─── SOW / Project ───────────────────────────────────────────────────────────

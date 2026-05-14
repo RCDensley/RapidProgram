@@ -287,13 +287,32 @@ function MilestoneInvoiceEditor({ sow, onChange }: {
       {invoices.map(m => (
         <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: m.completed ? 'var(--emerald-bright)' : 'var(--text-3)', flexShrink: 0, padding: 0 }}
-            title={m.completed ? 'Mark incomplete' : 'Mark invoiced'} onClick={() => upd(m.id, { completed: !m.completed })}>
+            title={m.completed ? 'Mark incomplete' : 'Mark invoiced'}
+            onClick={() => {
+              const nowCompleted = !m.completed
+              upd(m.id, {
+                completed: nowCompleted,
+                completedDate: nowCompleted ? dayjs().format('YYYY-MM-DD') : undefined,
+              })
+            }}>
             {m.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
           </button>
           <input className="field-input" style={{ flex: 1, fontSize: 12, padding: '5px 8px', textDecoration: m.completed ? 'line-through' : 'none', color: m.completed ? 'var(--text-3)' : 'var(--text-1)' }}
             value={m.label} placeholder="Milestone label" onChange={e => upd(m.id, { label: e.target.value })} />
-          <input className="field-input font-mono" type="date" style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
-            value={m.date} onChange={e => upd(m.id, { date: e.target.value })} />
+          {/* Planned date — always editable */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Planned</div>
+            <input className="field-input font-mono" type="date" style={{ width: 130, fontSize: 12, padding: '5px 8px' }}
+              value={m.date} onChange={e => upd(m.id, { date: e.target.value })} />
+          </div>
+          {/* Actual completion date — only shown when milestone is marked complete */}
+          {m.completed && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexShrink: 0 }}>
+              <div style={{ fontSize: 9, color: 'var(--emerald)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actual</div>
+              <input className="field-input font-mono" type="date" style={{ width: 130, fontSize: 12, padding: '5px 8px', borderColor: 'var(--emerald)' }}
+                value={m.completedDate ?? ''} onChange={e => upd(m.id, { completedDate: e.target.value })} />
+            </div>
+          )}
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--text-3)', pointerEvents: 'none' }}>$</span>
             <input className="field-input font-mono" type="number" style={{ width: 110, fontSize: 12, padding: '5px 8px 5px 18px' }}

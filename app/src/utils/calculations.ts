@@ -248,29 +248,41 @@ export function sowBufferConsumption(sow: SOW, data: AppData): number {
  * For fixed-price SOWs: forecast is a step function at milestone invoice dates;
  * actuals step up when milestones are marked completed.
  */
-export function generateBurndownSeries(sow: SOW, data: AppData): BurndownPoint[] {
+/**
+ * Generate weekly cost burndown points for a SOW.
+ * forceTM: when true, always uses T&M (allocation/timesheet) calculation even for
+ *          fixed-price SOWs — used by the Dashboard internal view.
+ */
+export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false): BurndownPoint[] {
   const points: BurndownPoint[] = []
   const budget      = sowTotalBudget(sow)
   const bufferFloor = sowDeliverableBudget(sow)
 
   let current = dayjs(sow.startDate).startOf('isoWeek')
-  const end   = dayjs(sow.endDate).endOf('isoWeek')
+  let end     = dayjs(sow.endDate).endOf('isoWeek')
 
   // ── Fixed-price path ────────────────────────────────────────────────────
-  if (sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
+  if (!forceTM && sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
     const invoices = [...sow.milestoneInvoices].sort((a, b) => a.date.localeCompare(b.date))
+
+    // Extend the series end to cover any milestone dates beyond sow.endDate
+    const lastMilestoneDate = invoices.reduce((max, m) => m.date > max ? m.date : max, sow.endDate)
+    if (lastMilestoneDate > sow.endDate) {
+      end = dayjs(lastMilestoneDate).endOf('isoWeek')
+    }
 
     while (current.isBefore(end) || current.isSame(end, 'week')) {
       const weekEnd = current.add(6, 'day').format('YYYY-MM-DD')
 
-      // Forecast: sum of all milestone amounts with planned date <= end of this week
+      // Forecast: cumulative sum of milestones whose planned date falls this week or earlier
       const forecastCumulative = invoices
         .filter(m => m.date <= weekEnd)
         .reduce((sum, m) => sum + m.amount, 0)
 
-      // Actual: sum of completed milestone amounts with planned date <= end of this week
+      // Actual: completed milestones stepped at completedDate (falls back to planned date
+      // for milestones completed before completedDate was introduced)
       const actualCumulative = invoices
-        .filter(m => m.completed && m.date <= weekEnd)
+        .filter(m => m.completed && (m.completedDate ?? m.date) <= weekEnd)
         .reduce((sum, m) => sum + m.amount, 0)
 
       points.push({

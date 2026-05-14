@@ -482,9 +482,17 @@ export default function Dashboard() {
     }).filter((_, i) => i % 2 === 0)
   }
 
-  const burndownData = chartSow
+  const isFixedChartSow = chartSow?.pricingType === 'fixed'
+  const clientBurndown  = chartSow
     ? generateBurndownSeries(chartSow, data).filter((_, i) => i % 2 === 0)
     : buildProgramBurndown()
+  // For fixed-price SOWs the internal view forces T&M (allocation/timesheet) calculation
+  const internalBurndown = chartSow && isFixedChartSow
+    ? generateBurndownSeries(chartSow, data, true).filter((_, i) => i % 2 === 0)
+    : clientBurndown
+  const burndownData = burndownView === 'internal' && isFixedChartSow
+    ? internalBurndown
+    : clientBurndown
 
   // DA-1 detail data
   const teamMembers   = selectedSow ? getSowTeamMembers(selectedSow.id, data) : []
