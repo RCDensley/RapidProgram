@@ -282,10 +282,46 @@ function buildSourceSeries(
     series.push(row)
   }
 
-  return { series, sources }
+  return {
+    series,
+    sources: sources.map((src: any) => ({ id: src.id, label: src.label, color: src.color, total: src.amount })),
+  }
 }
 
 function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseData: any[]; timeEntries: any[] }) {
+  // Fixed-price SOWs bill by milestone invoice, not by T&M hours.
+  // Per-source allocation burndown is not meaningful — show source split instead.
+  if (sow?.pricingType === 'fixed') {
+    const sources: any[] = sow.budgetSources ?? []
+    const total = sources.reduce((s: number, src: any) => s + src.amount, 0)
+    return (
+      <div style={{ padding: '16px 0' }}>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 16, fontWeight: 600 }}>
+          Fixed-price contract — budget source allocation (milestone delivery view shows planned vs invoiced milestones)
+        </div>
+        {sources.map((src: any) => {
+          const pct = total > 0 ? Math.round((src.amount / total) * 100) : 0
+          return (
+            <div key={src.id} style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: src.color }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>{src.label}</span>
+                </div>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>
+                  {fmt(src.amount)} ({pct}%)
+                </span>
+              </div>
+              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: src.color, borderRadius: 3 }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   const { series, sources } = buildSourceSeries(sow, baseData, timeEntries)
 
   if (!sources.length) {
