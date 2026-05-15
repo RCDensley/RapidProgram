@@ -479,6 +479,12 @@ export default function Dashboard() {
   const sowForecast = selectedSow ? sowForecastCost(selectedSow.id, data, useInternalCalc) : 0
   const sowBudget   = selectedSow ? sowTotalBudget(selectedSow) : 0
 
+  // The SOW detail burndown MUST use selectedSow's own series, not burndownData which
+  // is derived from chartSow (the program pill selector) and may be program-level data.
+  const selectedSowBurndown = selectedSow
+    ? generateBurndownSeries(selectedSow, data, useInternalCalc).filter((_, i) => i % 2 === 0)
+    : []
+
   return (
     <div className="view-root">
 
@@ -829,14 +835,14 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* SOW-specific burndown */}
+              {/* SOW-specific burndown — uses selectedSowBurndown, NOT burndownData */}
               <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px 20px' }}>
                 <h3 style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
                   Burndown — {selectedSow.shortName}
                 </h3>
                 <BurndownChart
                   sow={selectedSow}
-                  data={burndownData}
+                  data={selectedSowBurndown}
                   timeEntries={data.timeEntries}
                   view={burndownView}
                   onViewChange={setBurndownView}
