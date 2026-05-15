@@ -100,6 +100,7 @@ app/src/
     taskUtils.ts          — task completion, recurrence, move helpers
   views/
     Dashboard.tsx         — SOW selector, burndown (program + per-SOW), funding panel with per-source drawdown bars, internal/client toggle, fixed-price step chart
+                            SEE BURNDOWN ROUTING NOTE BELOW
     ProjectPlan.tsx       — drag/drop Gantt with phase lanes and milestones
     Resources.tsx         — phase engagement editor
     Tasks.tsx             — kanban board (horizontally collapsible bucket columns, status field, file attachments, CSV export/import)
@@ -222,6 +223,57 @@ The script must be run from the project root. It uses `api/node_modules/@azure/s
 }
 ```
 `/assets/*` MUST be excluded — Vite outputs hashed JS bundles there and the SWA will serve index.html for them (wrong MIME type) without this exclusion.
+
+---
+
+## Dashboard burndown routing — CRITICAL
+
+Dashboard.tsx has TWO independent SOW selectors that must not be confused:
+
+| State | Set by | Used for |
+|---|---|---|
+| `selectedSowId` / `selectedSow` | Clicking a SOW card in the left panel | Right-panel detail view (team, funding, KPIs) |
+| `chartSowId` / `chartSow` | Clicking a pill button below the program burndown chart | Program burndown chart filter only |
+
+### Burndown data sources
+
+```
+burndownData          = from chartSow (pill)    → used by the PROGRAM burndown chart only
+selectedSowBurndown   = from selectedSow (card) → used by the SOW DETAIL burndown chart
+```
+
+These MUST stay separate. **Do not use `burndownData` for the SOW detail burndown chart.**
+Using `burndownData` for the detail chart causes it to show program-level data
+(268k ceiling, wrong start date from program timesheet history) when no pill is selected.
+
+### Fixed-price burndown paths
+
+`generateBurndownSeries(sow, data, forceTM?)`:
+- `pricingType === 'fixed'` AND `forceTM = false` → **milestone step chart** (client view)
+  - Forecast: steps at each milestone's `date` (planned)
+  - Actual: steps at each completed milestone's `completedDate` (falls back to `date`)
+  - Y-axis ceiling: `sowTotalBudget` (fixed contract value)
+- `pricingType === 'fixed'` AND `forceTM = true` → **T&M allocation chart** (internal view)
+  - Same allocation/timesheet calculation as T&M projects
+  - Y-axis ceiling: same `sowTotalBudget` (fixed contract value as internal budget ceiling)
+- `pricingType !== 'fixed'` OR `forceTM = true` → **T&M path**
+
+The fixed-price path runs whenever `pricingType === 'fixed'`, even with no milestones
+(returns flat-zero series). This prevents timesheet actuals bleeding into the client view.
+
+### BudgetSourceBar (funding section)
+
+Always computes per-source drawdown from timesheet entries UNLESS `suppressTimesheetActuals=true`.
+Pass `suppressTimesheetActuals={isFixedSelectedSow && burndownView === 'client'}` to hide
+consultant hours from the client view of fixed-price projects.
+
+### View-dependent KPI values (fixed-price)
+
+```
+useInternalCalc = isFixedSelectedSow && burndownView === 'internal'
+sowActual   = sowActualCost(id, data, true, useInternalCalc)   // milestone-based OR timesheet
+sowForecast = sowForecastCost(id, data, useInternalCalc)       // milestone-total OR allocation
+```
 
 ---
 
