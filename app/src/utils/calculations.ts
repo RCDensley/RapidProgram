@@ -162,11 +162,13 @@ export function sowForecastHours(sowId: string, data: AppData): number {
  * Total forecast cost for a SOW.
  * Fixed-price SOWs: forecast = full contract value (sum of all milestone invoices).
  * T&M SOWs: forecast from resource allocations.
+ * forceAllocation: when true, always uses allocation-based forecast regardless of pricing type
+ *                  — used by the Dashboard internal view for fixed-price SOWs.
  */
-export function sowForecastCost(sowId: string, data: AppData): number {
+export function sowForecastCost(sowId: string, data: AppData, forceAllocation = false): number {
   const sow = data.sows.find(s => s.id === sowId)
   if (!sow) return 0
-  if (sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
+  if (!forceAllocation && sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
     return sow.milestoneInvoices.reduce((sum, m) => sum + m.amount, 0)
   }
   return data.allocations
@@ -187,9 +189,15 @@ export function sowActualHours(sowId: string, data: AppData, billableOnly = true
  * Fixed-price SOWs: actual = sum of completed milestone invoice amounts.
  * T&M SOWs: actual from time entries.
  */
-export function sowActualCost(sowId: string, data: AppData, billableOnly = true): number {
+/**
+ * Total actual cost for a SOW.
+ * Fixed-price SOWs: actual = completed milestone amounts (client view).
+ * forceTimesheet: when true, always returns timesheet costs regardless of pricing type
+ *                 — used by the Dashboard internal view for fixed-price SOWs.
+ */
+export function sowActualCost(sowId: string, data: AppData, billableOnly = true, forceTimesheet = false): number {
   const sow = data.sows.find(s => s.id === sowId)
-  if (sow?.pricingType === 'fixed' && sow?.milestoneInvoices?.length) {
+  if (!forceTimesheet && sow?.pricingType === 'fixed' && sow?.milestoneInvoices?.length) {
     return sow.milestoneInvoices
       .filter(m => m.completed)
       .reduce((sum, m) => sum + m.amount, 0)
