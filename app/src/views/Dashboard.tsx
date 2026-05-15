@@ -85,15 +85,21 @@ function BufferBar({ pct: p, label }: { pct: number; label: string }) {
 }
 
 // ─── Budget source stacked bar ────────────────────────────────────────────────
-function BudgetSourceBar({ sow, actual, timeEntries }: { sow: any; actual: number; timeEntries: any[] }) {
+function BudgetSourceBar({ sow, actual, timeEntries, suppressTimesheetActuals = false }: {
+  sow: any; actual: number; timeEntries: any[]
+  suppressTimesheetActuals?: boolean   // true for fixed-price client view — consultant hours are not client-side actuals
+}) {
   const total = sowTotalBudget(sow)
   if (total === 0 || !sow.budgetSources?.length) return null
 
-  // Per-source actual: sum resolved cost from time entries tagged to each source
+  // Per-source actual: sum resolved cost from time entries tagged to each source.
+  // Suppressed for fixed-price client view where actuals are milestone-based, not hour-based.
   const drawnBySource: Record<string, number> = {}
-  for (const entry of timeEntries) {
-    if (entry.sowId !== sow.id || !entry.budgetSourceId || entry.billable !== 'Billable') continue
-    drawnBySource[entry.budgetSourceId] = (drawnBySource[entry.budgetSourceId] ?? 0) + (entry.resolvedCost ?? 0)
+  if (!suppressTimesheetActuals) {
+    for (const entry of timeEntries) {
+      if (entry.sowId !== sow.id || !entry.budgetSourceId || entry.billable !== 'Billable') continue
+      drawnBySource[entry.budgetSourceId] = (drawnBySource[entry.budgetSourceId] ?? 0) + (entry.resolvedCost ?? 0)
+    }
   }
 
   return (
@@ -801,7 +807,12 @@ export default function Dashboard() {
                   <h3 style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <DollarSign size={12} /> Funding
                   </h3>
-                  <BudgetSourceBar sow={selectedSow} actual={sowActual} timeEntries={data.timeEntries} />
+                  <BudgetSourceBar
+                    sow={selectedSow}
+                    actual={sowActual}
+                    timeEntries={data.timeEntries}
+                    suppressTimesheetActuals={isFixedSelectedSow && burndownView === 'client'}
+                  />
                   {/* Quick stats */}
                   <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <div>

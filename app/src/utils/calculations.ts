@@ -270,8 +270,27 @@ export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false)
   let end     = dayjs(sow.endDate).endOf('isoWeek')
 
   // ── Fixed-price path ────────────────────────────────────────────────────
-  if (!forceTM && sow.pricingType === 'fixed' && sow.milestoneInvoices?.length) {
-    const invoices = [...sow.milestoneInvoices].sort((a, b) => a.date.localeCompare(b.date))
+  // Always take this branch for fixed-price SOWs regardless of whether milestones
+  // are configured yet — prevents timesheet actuals leaking into the client view.
+  if (!forceTM && sow.pricingType === 'fixed') {
+    const invoices = [...(sow.milestoneInvoices ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+
+    // No milestones configured yet — return a flat zero series so timesheet
+    // actuals don't bleed through via the T&M fallback path.
+    if (!invoices.length) {
+      while (current.isBefore(end) || current.isSame(end, 'week')) {
+        points.push({
+          week: current.format('MMM D'),
+          date: current.format('YYYY-MM-DD'),
+          forecastCumulative: 0,
+          actualCumulative:   0,
+          budgetCeiling:      budget,
+          bufferFloor:        Math.round(bufferFloor),
+        })
+        current = current.add(1, 'week')
+      }
+      return points
+    }
 
     // Extend the series end to cover any milestone dates beyond sow.endDate
     const lastMilestoneDate = invoices.reduce((max, m) => m.date > max ? m.date : max, sow.endDate)
