@@ -435,10 +435,12 @@ export default function Dashboard() {
   // Burndown data — program aggregate when chartSowId is null, else SOW-specific
   const chartSow = data.sows.find(s => s.id === chartSowId) ?? null
 
-  // Program-level burndown: sum all SOWs week by week
+  // Program-level burndown: sum all SOWs week by week.
+  // Always forces T&M (allocation/timesheet) path for all SOWs so the program chart
+  // is consistent with the KPI cards and avoids fixed-price milestone step jumps.
   function buildProgramBurndown() {
     if (data.sows.length === 0) return []
-    const allSeries = data.sows.map(sow => generateBurndownSeries(sow, data))
+    const allSeries = data.sows.map(sow => generateBurndownSeries(sow, data, true))
     const longest   = allSeries.reduce((a, b) => a.length >= b.length ? a : b, [])
     return longest.map((point, i) => {
       // For series shorter than the longest, hold the last known cumulative value
