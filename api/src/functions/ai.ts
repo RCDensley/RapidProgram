@@ -46,7 +46,7 @@ function detectFileReferences(text: string): string[] {
 }
 
 // ─── Build system prompt from project data ────────────────────────────────────
-function buildSystemPrompt(appData: any, activityBatches?: any[]): string {
+function buildSystemPrompt(appData: any, activityByDate?: { date: string; batches: any[] }[]): string {
   const sows       = appData.sows ?? []
   const resources  = appData.resources ?? []
   const tasks      = appData.tasks ?? []
@@ -213,28 +213,32 @@ ${decisionSummary}
 
 == FILE REPOSITORY ==
 ${fileSummary}
-${buildActivitySection(activityBatches)}
+${buildActivitySection(activityByDate)}
 `
 }
 
-function buildActivitySection(batches?: any[]): string {
-  if (!batches?.length) return ''
-  const lines: string[] = []
-  for (const batch of batches) {
-    for (const e of (batch.entries ?? [])) {
-      const t = String(e.timestamp ?? '').slice(11, 16)
-      if (e.type === 'app_focus') {
-        const mins = Math.round((e.durationSeconds ?? 0) / 60)
-        lines.push(`  ${t}  ${e.appName ?? 'App'} — ${e.windowTitle ?? ''} (${mins} min)`)
-      } else if (e.type === 'audio_transcript' && e.transcript) {
-        lines.push(`  ${t}  [Transcript] ${e.transcript}`)
-      } else if (e.type === 'screen_context' && e.screenTags) {
-        lines.push(`  ${t}  [Screen] ${e.screenTags}`)
+function buildActivitySection(activityByDate?: { date: string; batches: any[] }[]): string {
+  if (!activityByDate?.length) return ''
+  const sections: string[] = []
+  for (const { date, batches } of activityByDate) {
+    const lines: string[] = []
+    for (const batch of batches) {
+      for (const e of (batch.entries ?? [])) {
+        const t = String(e.timestamp ?? '').slice(11, 16)
+        if (e.type === 'app_focus') {
+          const mins = Math.round((e.durationSeconds ?? 0) / 60)
+          lines.push(`  ${t}  ${e.appName ?? 'App'} — ${e.windowTitle ?? ''} (${mins} min)`)
+        } else if (e.type === 'audio_transcript' && e.transcript) {
+          lines.push(`  ${t}  [Transcript] ${e.transcript}`)
+        } else if (e.type === 'screen_context' && e.screenTags) {
+          lines.push(`  ${t}  [Screen] ${e.screenTags}`)
+        }
       }
     }
+    if (lines.length) sections.push(`--- ${date} ---\n${lines.join('\n')}`)
   }
-  if (!lines.length) return ''
-  return `\n== TODAY'S ACTIVITY LOG ==\n${lines.join('\n')}`
+  if (!sections.length) return ''
+  return `\n== ACTIVITY LOG (last 7 days) ==\n${sections.join('\n\n')}`
 }
 
 // ─── POST /api/ai ─────────────────────────────────────────────────────────────
@@ -255,13 +259,22 @@ app.http('aiChat', {
       const rawData = await readBlob(svc, DATA_CONTAINER, DATA_BLOB)
       const appData = rawData ? JSON.parse(rawData) : {}
 
-      // Read today's activity log (if any) and inject into system prompt
-      const todayDate   = new Date().toISOString().slice(0, 10)
-      const activityRaw = await readBlob(svc, DATA_CONTAINER, `activity-log/${todayDate}.json`)
-      const activityLog = activityRaw ? JSON.parse(activityRaw) : []
+      // Read the last 7 days of activity logs so the AI can reference recent meetings.
+      // Uses UTC dates — the daemon sends local AEST dates, so we cover ±1 day of overlap.
+      const activityByDate: { date: string; batches: any[] }[] = []
+      const now = new Date()
+      for (let i = 0; i < 7; i++) {
+        const d   = new Date(now)
+        d.setUTCDate(d.getUTCDate() - i)
+        const date = d.toISOString().slice(0, 10)
+        const raw  = await readBlob(svc, DATA_CONTAINER, `activity-log/${date}.json`)
+        if (raw) {
+          try { activityByDate.push({ date, batches: JSON.parse(raw) }) } catch { /* skip */ }
+        }
+      }
 
-      // Build system prompt from live project data + today's activity
-      const systemPrompt = buildSystemPrompt(appData, activityLog)
+      // Build system prompt from live project data + recent activity logs
+      const systemPrompt = buildSystemPrompt(appData, activityByDate)
 
       // Detect /filename references in the last user message
       const lastUserMsg   = [...incomingMessages].reverse().find(m => m.role === 'user')
