@@ -1,8 +1,11 @@
 import { HttpRequest } from '@azure/functions'
 
-// GitHub usernames allowed to write to the program data.
-// Keep in sync with app/src/auth.ts on the client side.
-const ALLOWLIST = ['RCDensley', 'tonyhenderson766']
+// Keep in sync with app/src/auth.tsx on the client side.
+// userDetails check is case-insensitive. Useful for stable GitHub logins.
+const ALLOWLIST_USERNAMES = ['RCDensley', 'tonyhenderson766']
+// userId check uses the SWA-stable identifier. Required when userDetails is
+// returned censored by SWA (e.g. GitHub user has email set to private).
+const ALLOWLIST_USER_IDS: string[] = []
 
 export interface ClientPrincipal {
   identityProvider: string
@@ -31,5 +34,7 @@ export function isAllowedUser(req: HttpRequest): boolean {
     return !process.env.WEBSITE_INSTANCE_ID
   }
   const userDetails = (principal.userDetails ?? '').toLowerCase()
-  return ALLOWLIST.some(u => u.toLowerCase() === userDetails)
+  const byName = ALLOWLIST_USERNAMES.some(u => u.toLowerCase() === userDetails)
+  const byId   = ALLOWLIST_USER_IDS.includes(principal.userId)
+  return byName || byId
 }
