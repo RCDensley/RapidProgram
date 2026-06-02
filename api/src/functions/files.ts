@@ -2,6 +2,7 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { BlobServiceClient } from '@azure/storage-blob'
 import { v4 as uuidv4 } from 'uuid'
 import { getAIProvider } from '../_lib/providers'
+import { isAllowedUser } from '../_lib/auth'
 
 const FILES_CONTAINER = 'pmtracking-files'
 const DATA_CONTAINER  = 'pmtracking'
@@ -110,6 +111,7 @@ app.http('uploadFile', {
   authLevel: 'anonymous',
   route: 'files',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    if (!isAllowedUser(req)) return { status: 403, body: 'Forbidden' }
     try {
       const svc = getStorageClient()
       await ensureFilesContainer(svc)
@@ -180,6 +182,7 @@ app.http('deleteFile', {
   authLevel: 'anonymous',
   route: 'files/{storageName}',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    if (!isAllowedUser(req)) return { status: 403, body: 'Forbidden' }
     try {
       const storageName = req.params.storageName
       if (!storageName) return { status: 400, body: JSON.stringify({ error: 'Missing storageName' }) }

@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
 import { BlobServiceClient } from '@azure/storage-blob'
+import { isAllowedUser } from '../_lib/auth'
 
 const CONTAINER = 'pmtracking'
 const BLOB_NAME  = 'appdata.json'
@@ -38,6 +39,7 @@ app.http('saveData', {
   authLevel: 'anonymous',
   route: 'data',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    if (!isAllowedUser(req)) return { status: 403, body: 'Forbidden' }
     try {
       const body = await req.text()
       const blob = getBlobClient()

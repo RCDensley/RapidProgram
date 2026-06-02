@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions'
 import { BlobServiceClient } from '@azure/storage-blob'
 import { getAIProvider, AIMessage } from '../_lib/providers'
+import { isAllowedUser } from '../_lib/auth'
 
 const FILES_CONTAINER = 'pmtracking-files'
 const DATA_CONTAINER  = 'pmtracking'
@@ -247,6 +248,7 @@ app.http('aiChat', {
   authLevel: 'anonymous',
   route: 'ai',
   handler: async (req: HttpRequest, _ctx: InvocationContext): Promise<HttpResponseInit> => {
+    if (!isAllowedUser(req)) return { status: 403, body: 'Forbidden' }
     try {
       const body = await req.json() as { messages: { role: string; content: string }[] }
       const incomingMessages = body.messages ?? []
