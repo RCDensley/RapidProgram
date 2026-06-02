@@ -4,6 +4,7 @@ import {
   getProgramSummary, sowActualCost, sowForecastCost, sowTotalBudget,
   sowBufferConsumption, sowDeliverableBudget, generateBurndownSeries,
   getCurrentPhase, getSowTeamMembers, derivedAllocationDates,
+  BurndownUnit,
 } from '../utils/calculations'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -11,15 +12,21 @@ import {
 } from 'recharts'
 import {
   DollarSign, TrendingDown, CheckCircle2, Clock,
-  AlertTriangle, Info, X, Users, Calendar, ChevronRight, Lock, Eye,
+  AlertTriangle, Info, X, Users, Calendar, ChevronRight, Lock, Eye, Clock3,
 } from 'lucide-react'
-import { PHASE_COLORS } from '../types'
+import { PHASE_COLORS, HOURS_RATE_DEFAULT } from '../types'
 import { Circle } from 'lucide-react'
 import dayjs from 'dayjs'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmt(n: number) {
   return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })
+}
+function fmtHours(n: number) {
+  return `${Math.round(n).toLocaleString('en-AU')} h`
+}
+function fmtUnit(n: number, unit: BurndownUnit) {
+  return unit === 'hours' ? fmtHours(n) : fmt(n)
 }
 function pct(a: number, b: number) {
   return b > 0 ? Math.round((a / b) * 100) : 0
@@ -178,9 +185,32 @@ function ViewToggle({ view, onChange }: { view: BurndownView; onChange: (v: Burn
   )
 }
 
+function UnitToggle({ unit, onChange }: { unit: BurndownUnit; onChange: (u: BurndownUnit) => void }) {
+  const btnStyle = (active: boolean, col: string): React.CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 5,
+    padding: '5px 12px', fontSize: 11, fontWeight: 700,
+    borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+    fontFamily: 'var(--font-main)', border: 'none',
+    background: active ? col + '22' : 'transparent',
+    color: active ? col : 'var(--text-3)',
+    outline: active ? `1.5px solid ${col}66` : '1.5px solid var(--border)',
+    transition: 'all 0.15s',
+  })
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      <button style={btnStyle(unit === 'cost', '#34d399')} onClick={() => onChange('cost')}>
+        <DollarSign size={11} /> Cost
+      </button>
+      <button style={btnStyle(unit === 'hours', '#fbbf24')} onClick={() => onChange('hours')} title={`Converted at $${HOURS_RATE_DEFAULT}/hr (Senior Consultant)`}>
+        <Clock3 size={11} /> Hours
+      </button>
+    </div>
+  )
+}
+
 // ─── Client burndown chart ───────────────────────────────────────────────────────────────
-function ClientBurndownChart({ data: chartData, sow }: { data: any[]; sow?: any }) {
-  const isFixed    = sow?.pricingType === 'fixed'
+function ClientBurndownChart({ data: chartData, sow, unit }: { data: any[]; sow?: any; unit: BurndownUnit }) {
+  const isFixed    = sow?.pricingType === 'fixed' && unit === 'cost'
   const hasInvoices = isFixed && (sow?.milestoneInvoices?.length ?? 0) > 0
   const lineType   = isFixed ? 'stepAfter' : 'monotone'
 
@@ -218,11 +248,11 @@ function ClientBurndownChart({ data: chartData, sow }: { data: any[]; sow?: any 
         <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45" />
           <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} />
-          <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} width={48} />
+          <YAxis tickFormatter={v => unit === 'hours' ? `${Math.round(v)}h` : `${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} width={unit === 'hours' ? 56 : 48} />
           <Tooltip
             contentStyle={{ background: '#0d1526', border: '1px solid #1e2d45', borderRadius: 8 }}
             labelStyle={{ color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 11 }}
-            formatter={(v: number, name: string) => [fmt(v), name]}
+            formatter={(v: number, name: string) => [fmtUnit(v, unit), name]}
           />
           <ReferenceLine y={chartData[0]?.budgetCeiling} stroke="#f87171" strokeDasharray="4 4"
             label={{ value: 'Budget', fill: '#f87171', fontSize: 10 }} />
@@ -248,6 +278,7 @@ function buildSourceSeries(
   sow: any,
   baseData: any[],
   timeEntries: any[],
+  unit: BurndownUnit = 'cost',
 ): { series: any[]; sources: { id: string; label: string; color: string; total: number }[] } {
   const sources = sow.budgetSources ?? []
   if (!sources.length || !baseData.length) return { series: [], sources: [] }
@@ -257,17 +288,22 @@ function buildSourceSeries(
   // Build weekly actual per source from time entries
   const actualByWeekSource: Record<string, Record<string, number>> = {}
   for (const entry of timeEntries) {
-    if (entry.sowId !== sow.id || !entry.budgetSourceId || !entry.resolvedCost) continue
+    if (entry.sowId !== sow.id || !entry.budgetSourceId) continue
+    const contribution = unit === 'hours' ? entry.hours : entry.resolvedCost
+    if (!contribution) continue
     const week = dayjs(entry.date).startOf('isoWeek').format('MMM D')
     if (!actualByWeekSource[week]) actualByWeekSource[week] = {}
     actualByWeekSource[week][entry.budgetSourceId] =
-      (actualByWeekSource[week][entry.budgetSourceId] ?? 0) + entry.resolvedCost
+      (actualByWeekSource[week][entry.budgetSourceId] ?? 0) + contribution
   }
 
   // Accumulate per source across weeks
   const cumActual: Record<string, number> = {}
   const cumForecast: Record<string, number> = {}
   sources.forEach((src: any) => { cumActual[src.id] = 0; cumForecast[src.id] = 0 })
+
+  // Source ceiling in the chosen unit — convert $ to hours via the default rate.
+  const sourceCeiling = (amount: number) => unit === 'hours' ? amount / HOURS_RATE_DEFAULT : amount
 
   const series: any[] = []
   for (let idx = 0; idx < baseData.length; idx++) {
@@ -283,21 +319,21 @@ function buildSourceSeries(
       cumActual[src.id]   += actualByWeekSource[point.week]?.[src.id] ?? 0
       row[`forecast_${src.id}`] = Math.round(cumForecast[src.id])
       row[`actual_${src.id}`]   = Math.round(cumActual[src.id])
-      row[`ceiling_${src.id}`]  = src.amount
+      row[`ceiling_${src.id}`]  = sourceCeiling(src.amount)
     })
     series.push(row)
   }
 
   return {
     series,
-    sources: sources.map((src: any) => ({ id: src.id, label: src.label, color: src.color, total: src.amount })),
+    sources: sources.map((src: any) => ({ id: src.id, label: src.label, color: src.color, total: sourceCeiling(src.amount) })),
   }
 }
 
-function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseData: any[]; timeEntries: any[] }) {
+function InternalBurndownChart({ sow, baseData, timeEntries, unit }: { sow: any; baseData: any[]; timeEntries: any[]; unit: BurndownUnit }) {
   // baseData is always T&M allocation data when called from the Dashboard —
   // for fixed-price SOWs the Dashboard passes internalBurndown (forceTM series).
-  const { series, sources } = buildSourceSeries(sow, baseData, timeEntries)
+  const { series, sources } = buildSourceSeries(sow, baseData, timeEntries, unit)
 
   if (!sources.length) {
     return (
@@ -316,7 +352,7 @@ function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseD
             <div style={{ width: 10, height: 10, borderRadius: 2, background: src.color }} />
             {src.label}
             <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-              {fmt(src.total)}
+              {fmtUnit(src.total, unit)}
             </span>
           </div>
         ))}
@@ -328,7 +364,7 @@ function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseD
         <LineChart data={series} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45" />
           <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} />
-          <YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} width={48} />
+          <YAxis tickFormatter={v => unit === 'hours' ? `${Math.round(v)}h` : `${(v / 1000).toFixed(0)}k`} tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'JetBrains Mono' }} width={unit === 'hours' ? 56 : 48} />
           <Tooltip
             contentStyle={{ background: '#0d1526', border: '1px solid #1e2d45', borderRadius: 8 }}
             labelStyle={{ color: '#94a3b8', fontFamily: 'JetBrains Mono', fontSize: 11 }}
@@ -338,7 +374,7 @@ function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseD
               const srcId = idParts.join('_')
               const src   = sources.find(s => s.id === srcId)
               const label = src ? `${src.label} (${type})` : name
-              return [fmt(v), label]
+              return [fmtUnit(v, unit), label]
             }}
           />
           {sources.map(src => (
@@ -368,7 +404,7 @@ function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseD
             <div key={src.id} style={{ fontSize: 11 }}>
               <div style={{ color: src.color, fontWeight: 800, marginBottom: 2 }}>{src.label}</div>
               <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-2)' }}>
-                {fmt(Math.max(drawn, forecast))} / {fmt(src.total)}
+                {fmtUnit(Math.max(drawn, forecast), unit)} / {fmtUnit(src.total, unit)}
                 <span style={{ color: pctUsed > 90 ? '#f87171' : 'var(--text-3)', marginLeft: 4 }}>
                   ({pctUsed}%)
                 </span>
@@ -382,20 +418,22 @@ function InternalBurndownChart({ sow, baseData, timeEntries }: { sow: any; baseD
 }
 
 // ─── Combined burndown wrapper ────────────────────────────────────────────────
-function BurndownChart({ sow, data: chartData, timeEntries, view, onViewChange }: {
+function BurndownChart({ sow, data: chartData, timeEntries, view, onViewChange, unit, onUnitChange }: {
   sow?: any; data: any[]; timeEntries: any[]
   view: BurndownView; onViewChange: (v: BurndownView) => void
+  unit: BurndownUnit; onUnitChange: (u: BurndownUnit) => void
 }) {
   const hasMultipleSources = (sow?.budgetSources?.length ?? 0) > 1
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <UnitToggle unit={unit} onChange={onUnitChange} />
         <ViewToggle view={view} onChange={onViewChange} />
       </div>
       {view === 'client' || !sow ? (
-        <ClientBurndownChart data={chartData} sow={sow} />
+        <ClientBurndownChart data={chartData} sow={sow} unit={unit} />
       ) : (
-        <InternalBurndownChart sow={sow} baseData={chartData} timeEntries={timeEntries} />
+        <InternalBurndownChart sow={sow} baseData={chartData} timeEntries={timeEntries} unit={unit} />
       )}
       {view === 'internal' && !hasMultipleSources && sow && (
         <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8, fontWeight: 600 }}>
@@ -424,6 +462,7 @@ export default function Dashboard() {
   // DA-1: SOW selector — controls the left-panel detail view
   const [selectedSowId, setSelectedSowId] = useState<string | null>(null)
   const [burndownView,  setBurndownView]  = useState<BurndownView>('client')
+  const [chartUnit,     setChartUnit]     = useState<BurndownUnit>('cost')
   // Separate chart SOW — null means program-wide aggregate
   const [chartSowId,    setChartSowId]   = useState<string | null>(null)
 
@@ -440,7 +479,7 @@ export default function Dashboard() {
   // is consistent with the KPI cards and avoids fixed-price milestone step jumps.
   function buildProgramBurndown() {
     if (data.sows.length === 0) return []
-    const allSeries = data.sows.map(sow => generateBurndownSeries(sow, data, true))
+    const allSeries = data.sows.map(sow => generateBurndownSeries(sow, data, true, chartUnit))
     const longest   = allSeries.reduce((a, b) => a.length >= b.length ? a : b, [])
     return longest.map((point, i) => {
       // For series shorter than the longest, hold the last known cumulative value
@@ -461,11 +500,11 @@ export default function Dashboard() {
 
   const isFixedChartSow = chartSow?.pricingType === 'fixed'
   const clientBurndown  = chartSow
-    ? generateBurndownSeries(chartSow, data).filter((_, i) => i % 2 === 0)
+    ? generateBurndownSeries(chartSow, data, false, chartUnit).filter((_, i) => i % 2 === 0)
     : buildProgramBurndown()
   // For fixed-price SOWs the internal view forces T&M (allocation/timesheet) calculation
   const internalBurndown = chartSow && isFixedChartSow
-    ? generateBurndownSeries(chartSow, data, true).filter((_, i) => i % 2 === 0)
+    ? generateBurndownSeries(chartSow, data, true, chartUnit).filter((_, i) => i % 2 === 0)
     : clientBurndown
   const burndownData = burndownView === 'internal' && isFixedChartSow
     ? internalBurndown
@@ -484,7 +523,7 @@ export default function Dashboard() {
   // The SOW detail burndown MUST use selectedSow's own series, not burndownData which
   // is derived from chartSow (the program pill selector) and may be program-level data.
   const selectedSowBurndown = selectedSow
-    ? generateBurndownSeries(selectedSow, data, useInternalCalc).filter((_, i) => i % 2 === 0)
+    ? generateBurndownSeries(selectedSow, data, useInternalCalc, chartUnit).filter((_, i) => i % 2 === 0)
     : []
 
   return (
@@ -848,6 +887,8 @@ export default function Dashboard() {
                   timeEntries={data.timeEntries}
                   view={burndownView}
                   onViewChange={setBurndownView}
+                  unit={chartUnit}
+                  onUnitChange={setChartUnit}
                 />
               </div>
             </div>
@@ -868,6 +909,8 @@ export default function Dashboard() {
                   timeEntries={data.timeEntries}
                   view={burndownView}
                   onViewChange={setBurndownView}
+                  unit={chartUnit}
+                  onUnitChange={setChartUnit}
                 />
                 {/* Chart pills — control the burndown chart only, not the detail panel */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>

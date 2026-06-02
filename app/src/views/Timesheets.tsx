@@ -18,15 +18,16 @@ function fmt(n: number) {
 
 // ─── Column mapping field labels ──────────────────────────────────────────────
 const FIELD_LABELS: Record<keyof ColumnMap, string> = {
-  date:     'Date',
-  member:   'Member / Consultant',
-  company:  'Company / Client',
-  project:  'Project / SOW',
-  hours:    'Hours',
-  workRole: 'Work Role / Grade',
-  billable: 'Billable flag',
-  notes:    'Notes / Description',
-  status:   'Status',
+  date:          'Date',
+  member:        'Member / Consultant',
+  company:       'Company / Client',
+  project:       'Project / SOW',
+  hours:         'Hours',
+  workRole:      'Work Role / Grade',
+  billable:      'Billable flag',
+  notes:         'Notes / Description',
+  status:        'Status',
+  serviceNumber: 'Service # / Sub-category',
 }
 
 // ─── Column mapping editor ────────────────────────────────────────────────────
@@ -183,6 +184,8 @@ export default function Timesheets() {
   function effectiveBudgetSourceId(entry: TimeEntry): string | undefined {
     const ov  = entryOverrides[entry.id]
     if (ov?.budgetSourceId) return ov.budgetSourceId
+    // Auto-mapped from Service # at parse time — preserve it unless overridden
+    if (entry.budgetSourceId) return entry.budgetSourceId
     const sow = effectiveSOW(entry)
     if (!sow) return undefined
     return sourceSelections[sow.id]
@@ -235,7 +238,10 @@ export default function Timesheets() {
     const tagged = preview.map(entry => {
       const ov     = entryOverrides[entry.id] ?? {}
       const sowId  = 'sowId' in ov ? ov.sowId : entry.sowId
-      const srcId  = ov.budgetSourceId ?? (sowId ? sourceSelections[sowId] : undefined)
+      // Precedence: per-row override > Service #-mapped source > SOW bulk default
+      const srcId  = ov.budgetSourceId
+        ?? entry.budgetSourceId
+        ?? (sowId ? sourceSelections[sowId] : undefined)
       return { ...entry, sowId: sowId ?? entry.sowId, budgetSourceId: srcId }
     })
     const merged = deduplicateEntries(data.timeEntries, tagged)

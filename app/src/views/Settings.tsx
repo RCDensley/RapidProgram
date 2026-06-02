@@ -206,47 +206,67 @@ function BudgetSourceEditor({ sow, onChange }: {
   return (
     <div>
       {sources.map(src => (
-        <div key={src.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          {/* Colour picker */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              width: 20, height: 20, borderRadius: 4, background: src.color,
-              cursor: 'pointer', border: '2px solid rgba(255,255,255,0.15)',
-            }} />
+        <div key={src.id} style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12, paddingBottom: 8, borderBottom: '1px dashed var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Colour picker */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{
+                width: 20, height: 20, borderRadius: 4, background: src.color,
+                cursor: 'pointer', border: '2px solid rgba(255,255,255,0.15)',
+              }} />
+              <input
+                type="color"
+                value={src.color}
+                onChange={e => updateSource(src.id, { color: e.target.value })}
+                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: 20, height: 20 }}
+              />
+            </div>
+            {/* Label */}
             <input
-              type="color"
-              value={src.color}
-              onChange={e => updateSource(src.id, { color: e.target.value })}
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: 20, height: 20 }}
+              className="field-input"
+              style={{ flex: 1, fontSize: 12, padding: '5px 8px' }}
+              value={src.label}
+              placeholder="Source label"
+              onChange={e => updateSource(src.id, { label: e.target.value })}
             />
+            {/* Amount */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <span style={{
+                position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                fontSize: 11, color: 'var(--text-3)', pointerEvents: 'none',
+              }}>$</span>
+              <input
+                className="field-input font-mono"
+                type="number"
+                style={{ width: 110, fontSize: 12, padding: '5px 8px 5px 18px' }}
+                value={src.amount || ''}
+                placeholder="0"
+                onChange={e => updateSource(src.id, { amount: Number(e.target.value) })}
+              />
+            </div>
+            <button className="icon-btn" style={{ color: 'var(--red)', flexShrink: 0 }}
+              onClick={() => removeSource(src.id)}>
+              <Trash2 size={12} />
+            </button>
           </div>
-          {/* Label */}
-          <input
-            className="field-input"
-            style={{ flex: 1, fontSize: 12, padding: '5px 8px' }}
-            value={src.label}
-            placeholder="Source label"
-            onChange={e => updateSource(src.id, { label: e.target.value })}
-          />
-          {/* Amount */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <span style={{
-              position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-              fontSize: 11, color: 'var(--text-3)', pointerEvents: 'none',
-            }}>$</span>
+          {/* Service # mapping — comma-separated; matched against the Service # column on CSV import */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 28 }}>
+            <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>
+              Service #s
+            </span>
             <input
               className="field-input font-mono"
-              type="number"
-              style={{ width: 110, fontSize: 12, padding: '5px 8px 5px 18px' }}
-              value={src.amount || ''}
-              placeholder="0"
-              onChange={e => updateSource(src.id, { amount: Number(e.target.value) })}
+              style={{ flex: 1, fontSize: 11, padding: '4px 8px' }}
+              value={(src.serviceNumbers ?? []).join(', ')}
+              placeholder="e.g. 234252, 234253, 234256"
+              onChange={e => updateSource(src.id, {
+                serviceNumbers: e.target.value
+                  .split(',')
+                  .map(s => s.trim())
+                  .filter(Boolean),
+              })}
             />
           </div>
-          <button className="icon-btn" style={{ color: 'var(--red)', flexShrink: 0 }}
-            onClick={() => removeSource(src.id)}>
-            <Trash2 size={12} />
-          </button>
         </div>
       ))}
 

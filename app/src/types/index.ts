@@ -67,7 +67,12 @@ export interface BudgetSource {
   label: string
   amount: number
   color: string
+  serviceNumbers?: string[]
 }
+
+// Default hourly rate used to convert $ budgets into hours-equivalent ceilings
+// on the hours-mode burndown chart (Senior Consultant rate).
+export const HOURS_RATE_DEFAULT = 215
 
 // ─── Fixed-price milestone invoices ──────────────────────────────────────────
 // For fixed-price SOWs, burndown is driven by milestone invoice events rather
@@ -139,6 +144,7 @@ export interface TimeEntry {
   project: string
   sowId?: string
   budgetSourceId?: string   // DM-2: which budget source this entry draws from
+  serviceNumber?: string    // ConnectWise Service # — used to auto-resolve budgetSourceId
   hours: number
   notes: string
   status: string

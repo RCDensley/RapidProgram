@@ -6,27 +6,29 @@ import { TimeEntry, SOW, Resource, CW_WORK_ROLE_MAP, ROLE_RATES } from '../types
 // Maps logical field names to the actual column headers in the CSV.
 // Allows any CSV export format to be used without modifying the parser.
 export interface ColumnMap {
-  date:     string   // default: 'Date'
-  member:   string   // default: 'Member'
-  company:  string   // default: 'Company'
-  project:  string   // default: 'Project'
-  hours:    string   // default: 'Hours'
-  workRole: string   // default: 'Work Role'
-  billable: string   // default: 'Billable'
-  notes:    string   // default: 'Notes'
-  status:   string   // default: 'Status'
+  date:          string   // default: 'Date'
+  member:        string   // default: 'Member'
+  company:       string   // default: 'Company'
+  project:       string   // default: 'Project'
+  hours:         string   // default: 'Hours'
+  workRole:      string   // default: 'Work Role'
+  billable:      string   // default: 'Billable'
+  notes:         string   // default: 'Notes'
+  status:        string   // default: 'Status'
+  serviceNumber: string   // default: 'Service #'
 }
 
 export const DEFAULT_COLUMN_MAP: ColumnMap = {
-  date:     'Date',
-  member:   'Member',
-  company:  'Company',
-  project:  'Project',
-  hours:    'Hours',
-  workRole: 'Work Role',
-  billable: 'Billable',
-  notes:    'Notes',
-  status:   'Status',
+  date:          'Date',
+  member:        'Member',
+  company:       'Company',
+  project:       'Project',
+  hours:         'Hours',
+  workRole:      'Work Role',
+  billable:      'Billable',
+  notes:         'Notes',
+  status:        'Status',
+  serviceNumber: 'Service #',
 }
 
 /**
@@ -58,15 +60,16 @@ export function detectColumnMap(headers: string[]): ColumnMap {
   }
 
   return {
-    date:     best(['date', 'entry date', 'time date']),
-    member:   best(['member', 'consultant', 'resource', 'user', 'staff']),
-    company:  best(['company', 'client', 'organisation', 'customer']),
-    project:  best(['project', 'sow', 'engagement', 'work order']),
-    hours:    best(['hours', 'duration', 'quantity', 'time']),
-    workRole: best(['work role', 'role', 'position', 'work type', 'grade']),
-    billable: best(['billable', 'bill type', 'charge type', 'invoiceable']),
-    notes:    best(['notes', 'description', 'detail', 'comment', 'summary']),
-    status:   best(['status', 'state', 'approval']),
+    date:          best(['date', 'entry date', 'time date']),
+    member:        best(['member', 'consultant', 'resource', 'user', 'staff']),
+    company:       best(['company', 'client', 'organisation', 'customer']),
+    project:       best(['project', 'sow', 'engagement', 'work order']),
+    hours:         best(['hours', 'duration', 'quantity', 'time']),
+    workRole:      best(['work role', 'role', 'position', 'work type', 'grade']),
+    billable:      best(['billable', 'bill type', 'charge type', 'invoiceable']),
+    notes:         best(['notes', 'description', 'detail', 'comment', 'summary']),
+    status:        best(['status', 'state', 'approval']),
+    serviceNumber: best(['service #', 'service number', 'service no', 'ticket', 'service']),
   }
 }
 
@@ -103,6 +106,22 @@ function resolveSowId(project: string, sows: SOW[]): string | undefined {
   return undefined
 }
 
+// Find the SOW + budget source whose serviceNumbers list contains this Service #.
+// Returns sowId from the matched source's parent SOW so it can override project-name
+// matching when present (Service # is a stronger signal than project-name fuzzy match).
+function resolveByServiceNumber(serviceNumber: string, sows: SOW[]): { sowId?: string; budgetSourceId?: string } {
+  if (!serviceNumber) return {}
+  const sn = serviceNumber.trim()
+  for (const sow of sows) {
+    for (const src of (sow.budgetSources ?? [])) {
+      if ((src.serviceNumbers ?? []).some(n => n.trim() === sn)) {
+        return { sowId: sow.id, budgetSourceId: src.id }
+      }
+    }
+  }
+  return {}
+}
+
 function resolveRate(workRole: string, member: string, resources: Resource[]): number | undefined {
   const resource = resources.find(r => r.initials.toLowerCase() === member.toLowerCase())
   if (resource) return resource.hourlyRate
@@ -133,15 +152,16 @@ export function parseConnectWiseCSV(
 
   for (const row of result.data) {
     try {
-      const company  = row[cm.company]?.trim() ?? ''
-      const member   = row[cm.member]?.trim()  ?? ''
-      const project  = row[cm.project]?.trim() ?? ''
-      const rawHours = row[cm.hours]?.trim()   ?? ''
-      const workRole = row[cm.workRole]?.trim() ?? ''
-      const rawBill  = row[cm.billable]?.trim() ?? ''
-      const rawDate  = row[cm.date]?.trim()     ?? ''
-      const notes    = row[cm.notes]?.trim()    ?? ''
-      const status   = row[cm.status]?.trim()   ?? ''
+      const company       = row[cm.company]?.trim() ?? ''
+      const member        = row[cm.member]?.trim()  ?? ''
+      const project       = row[cm.project]?.trim() ?? ''
+      const rawHours      = row[cm.hours]?.trim()   ?? ''
+      const workRole      = row[cm.workRole]?.trim() ?? ''
+      const rawBill       = row[cm.billable]?.trim() ?? ''
+      const rawDate       = row[cm.date]?.trim()     ?? ''
+      const notes         = row[cm.notes]?.trim()    ?? ''
+      const status        = row[cm.status]?.trim()   ?? ''
+      const serviceNumber = cm.serviceNumber ? row[cm.serviceNumber]?.trim() ?? '' : ''
 
       if (filterCompany && company.toLowerCase() !== filterCompany.toLowerCase()) continue
 
@@ -153,9 +173,13 @@ export function parseConnectWiseCSV(
         : rawBill === 'No Charge' ? 'No Charge'
         : 'Non-Billable'
 
-      const sowId        = resolveSowId(project, sows)
-      const resolvedRate = resolveRate(workRole, member, resources)
-      const resolvedCost = resolvedRate != null ? hours * resolvedRate : undefined
+      // Service # match wins over project-name match — it's a precise mapping
+      // configured by the user vs. a fuzzy string match.
+      const serviceMatch = resolveByServiceNumber(serviceNumber, sows)
+      const sowId          = serviceMatch.sowId ?? resolveSowId(project, sows)
+      const budgetSourceId = serviceMatch.budgetSourceId
+      const resolvedRate   = resolveRate(workRole, member, resources)
+      const resolvedCost   = resolvedRate != null ? hours * resolvedRate : undefined
 
       entries.push({
         id:           uuidv4(),
@@ -164,6 +188,8 @@ export function parseConnectWiseCSV(
         company,
         project,
         sowId,
+        budgetSourceId,
+        serviceNumber: serviceNumber || undefined,
         hours,
         notes,
         status,

@@ -1,7 +1,9 @@
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import isBetween from 'dayjs/plugin/isBetween'
-import { AppData, BurndownPoint, Milestone, Phase, Resource, ResourceAllocation, SOW } from '../types'
+import { AppData, BurndownPoint, HOURS_RATE_DEFAULT, Milestone, Phase, Resource, ResourceAllocation, SOW } from '../types'
+
+export type BurndownUnit = 'cost' | 'hours'
 
 dayjs.extend(isoWeek)
 dayjs.extend(isBetween)
@@ -261,10 +263,16 @@ export function sowBufferConsumption(sow: SOW, data: AppData): number {
  * forceTM: when true, always uses T&M (allocation/timesheet) calculation even for
  *          fixed-price SOWs — used by the Dashboard internal view.
  */
-export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false): BurndownPoint[] {
+export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false, unit: BurndownUnit = 'cost'): BurndownPoint[] {
+  // Hours mode always uses the T&M (allocation/timesheet) path — milestones are
+  // dollar-denominated and don't translate to hours.
+  if (unit === 'hours') forceTM = true
+
   const points: BurndownPoint[] = []
-  const budget      = sowTotalBudget(sow)
-  const bufferFloor = sowDeliverableBudget(sow)
+  const sowBudgetCost = sowTotalBudget(sow)
+  // In hours mode, budget ceiling and buffer are expressed as senior-consultant-equivalent hours.
+  const budget      = unit === 'hours' ? sowBudgetCost / HOURS_RATE_DEFAULT : sowBudgetCost
+  const bufferFloor = unit === 'hours' ? sowDeliverableBudget(sow) / HOURS_RATE_DEFAULT : sowDeliverableBudget(sow)
 
   let current = dayjs(sow.startDate).startOf('isoWeek')
   let end     = dayjs(sow.endDate).endOf('isoWeek')
@@ -356,7 +364,8 @@ export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false)
         const effectiveDays  = Math.max(0, effectiveEnd.diff(effectiveStart, 'day') + 1)
         const resource       = data.resources.find(r => r.id === alloc.resourceId)
         if (!resource) return sum
-        return sum + (alloc.daysPerWeek / 5) * effectiveDays * 8 * resource.hourlyRate
+        const hoursThisAlloc = (alloc.daysPerWeek / 5) * effectiveDays * 8
+        return sum + (unit === 'hours' ? hoursThisAlloc : hoursThisAlloc * resource.hourlyRate)
       }, 0)
 
     forecastCumulative += forecastThisWeek
@@ -364,7 +373,7 @@ export function generateBurndownSeries(sow: SOW, data: AppData, forceTM = false)
     const actualThisWeek = data.timeEntries
       .filter(e => e.sowId === sow.id && e.billable === 'Billable')
       .filter(e => dayjs(e.date).isBetween(weekStart, weekEnd, 'day', '[]'))
-      .reduce((sum, e) => sum + (e.resolvedCost ?? 0), 0)
+      .reduce((sum, e) => sum + (unit === 'hours' ? e.hours : (e.resolvedCost ?? 0)), 0)
 
     actualCumulative += actualThisWeek
 
