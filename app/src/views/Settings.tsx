@@ -2,8 +2,9 @@ import React, { useState } from 'react'
 import { useApp } from '../App'
 import { SOW, Phase, PhaseName, BudgetSource, MilestoneInvoice, PHASE_COLORS, PhaseCriterion } from '../types'
 import { sowTotalBudget } from '../utils/calculations'
+import { exportToExcel } from '../utils/excelExport'
 import { v4 as uuidv4 } from 'uuid'
-import { Plus, Pencil, Trash2, Save, CheckCircle2, Circle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Save, CheckCircle2, Circle, Download } from 'lucide-react'
 import dayjs from 'dayjs'
 
 const PHASE_NAMES: PhaseName[] = ['Discover', 'Plan', 'Deliver', 'Handover']
@@ -470,9 +471,14 @@ export default function Settings() {
           <h1 className="view-title">Settings</h1>
           <p className="view-sub">Configure SOWs, phases, budgets, and project code mappings</p>
         </div>
-        <button className="btn-primary" onClick={() => setEditingSOW({})}>
-          <Plus size={14} /> Add SOW
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-secondary" onClick={() => exportToExcel(data)} title="Download a multi-sheet Excel workbook with all program data">
+            <Download size={14} /> Export to Excel
+          </button>
+          <button className="btn-primary" onClick={() => setEditingSOW({})}>
+            <Plus size={14} /> Add SOW
+          </button>
+        </div>
       </div>
 
       {data.sows.map(sow => {
