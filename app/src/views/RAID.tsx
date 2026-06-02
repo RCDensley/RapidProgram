@@ -150,9 +150,16 @@ function RiskModal({
 }) {
   const [r, setR] = useState<Partial<Risk>>(risk)
   const [comment, setComment] = useState('')
+  const [initialJson] = useState(() => JSON.stringify(risk))
 
   const score    = r.likelihood && r.impact ? r.likelihood * r.impact : 0
   const residual = r.likelihood && r.impact ? Math.max(0, score - (r.mitigationScore ?? 0)) : 0
+
+  function tryClose() {
+    const dirty = JSON.stringify(r) !== initialJson || comment.trim().length > 0
+    if (dirty && !confirm('Discard unsaved changes to this risk?')) return
+    onClose()
+  }
 
   function addComment() {
     if (!comment.trim()) return
@@ -168,11 +175,11 @@ function RiskModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={tryClose}>
       <div className="modal" style={{ width: 580, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{risk.id ? 'Edit Risk' : 'Add Risk'}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={tryClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field-row">
@@ -275,7 +282,7 @@ function RiskModal({
                 ✓ Promoted to issue
               </span>
             )}
-            <button className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-secondary" onClick={tryClose}>Cancel</button>
             <button className="btn-primary" onClick={() => onSave(r)}>Save</button>
           </div>
         </div>
@@ -293,6 +300,13 @@ function IssueModal({ issue, sows, onSave, onDelete, onClose }: {
 }) {
   const [i, setI]       = useState<Partial<Issue>>(issue)
   const [comment, setComment] = useState('')
+  const [initialJson] = useState(() => JSON.stringify(issue))
+
+  function tryClose() {
+    const dirty = JSON.stringify(i) !== initialJson || comment.trim().length > 0
+    if (dirty && !confirm('Discard unsaved changes to this issue?')) return
+    onClose()
+  }
 
   function addComment() {
     if (!comment.trim()) return
@@ -308,11 +322,11 @@ function IssueModal({ issue, sows, onSave, onDelete, onClose }: {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={tryClose}>
       <div className="modal" style={{ width: 580, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{issue.id ? 'Edit Issue' : 'Add Issue'}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={tryClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field">
@@ -372,7 +386,7 @@ function IssueModal({ issue, sows, onSave, onDelete, onClose }: {
 
           <div className="modal-actions">
             {onDelete && <button className="btn-danger" onClick={onDelete}><Trash2 size={12} /> Delete</button>}
-            <button className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-secondary" onClick={tryClose}>Cancel</button>
             <button className="btn-primary" onClick={() => onSave(i)}>Save</button>
           </div>
         </div>
@@ -389,12 +403,20 @@ function DecisionModal({ decision, sows, onSave, onDelete, onClose }: {
   onClose: () => void
 }) {
   const [d, setD] = useState<Partial<Decision>>(decision)
+  const [initialJson] = useState(() => JSON.stringify(decision))
+
+  function tryClose() {
+    const dirty = JSON.stringify(d) !== initialJson
+    if (dirty && !confirm('Discard unsaved changes to this decision?')) return
+    onClose()
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={tryClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3 className="modal-title">{decision.id ? 'Edit Decision' : 'Add Decision'}</h3>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={tryClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="field"><label className="field-label">Title</label>
@@ -418,7 +440,7 @@ function DecisionModal({ decision, sows, onSave, onDelete, onClose }: {
           </div>
           <div className="modal-actions">
             {onDelete && <button className="btn-danger" onClick={onDelete}><Trash2 size={12} /> Delete</button>}
-            <button className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-secondary" onClick={tryClose}>Cancel</button>
             <button className="btn-primary" onClick={() => onSave(d)}>Save</button>
           </div>
         </div>

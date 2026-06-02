@@ -228,10 +228,20 @@ function TaskPanel({ task, sows, projectFiles, onClose, onSave, onDelete, onAddA
   const [newLinkLabel, setNewLinkLabel] = useState('')
   const [newLinkUrl,   setNewLinkUrl]   = useState('')
   const [uploading,    setUploading]    = useState(false)
+  const [initialJson]                   = useState(() => JSON.stringify(task))
   const attachRef = useRef<HTMLInputElement>(null)
 
   const attachedFiles = projectFiles.filter(f => (t.attachments ?? []).includes(f.id))
   const isNew = !task.id
+
+  function tryClose() {
+    const dirty = JSON.stringify(t) !== initialJson
+      || newComment.trim().length > 0
+      || newLinkUrl.trim().length > 0
+      || newLinkLabel.trim().length > 0
+    if (dirty && !confirm('Discard unsaved changes to this task?')) return
+    onClose()
+  }
 
   function addComment() {
     if (!newComment.trim()) return
@@ -263,12 +273,14 @@ function TaskPanel({ task, sows, projectFiles, onClose, onSave, onDelete, onAddA
   }
 
   return (
+    <>
+    <div onClick={tryClose} style={{ position: 'fixed', inset: 0, zIndex: 49, cursor: 'default' }} />
     <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 440, background: 'var(--surface)', borderLeft: '1px solid var(--border)', zIndex: 50, display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
         <h3 style={{ fontSize: 15, fontWeight: 900, color: 'var(--text-1)' }}>{isNew ? 'New Task' : 'Edit Task'}</h3>
         <div style={{ display: 'flex', gap: 8 }}>
           {!isNew && onDelete && <button className="icon-btn" style={{ color: 'var(--red)' }} onClick={onDelete}><Trash2 size={14} /></button>}
-          <button className="icon-btn" onClick={onClose}><X size={14} /></button>
+          <button className="icon-btn" onClick={tryClose}><X size={14} /></button>
         </div>
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: '18px 20px' }}>
@@ -385,10 +397,11 @@ function TaskPanel({ task, sows, projectFiles, onClose, onSave, onDelete, onAddA
         </div>
       </div>
       <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button className="btn-secondary" onClick={onClose}>Cancel</button>
+        <button className="btn-secondary" onClick={tryClose}>Cancel</button>
         <button className="btn-primary" onClick={() => onSave(t)}>Save</button>
       </div>
     </div>
+    </>
   )
 }
 
@@ -631,7 +644,7 @@ export default function Tasks() {
           onAddAttachment={handleAddAttachment}
         />
       )}
-      {panelTask !== null && <div onClick={() => setPanelTask(null)} style={{ position: 'fixed', inset: 0, zIndex: 49, cursor: 'default' }} />}
+      {/* Backdrop is now rendered inside TaskPanel so it can guard against accidental dismissal. */}
     </div>
   )
 }
