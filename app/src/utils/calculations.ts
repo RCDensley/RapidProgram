@@ -406,14 +406,15 @@ export interface ProgramSummary {
 
 export function getProgramSummary(data: AppData): ProgramSummary {
   const totalBudget    = data.sows.reduce((s, sow) => s + sowTotalBudget(sow), 0)       // CA-4
-  // Program-level: always use allocation/timesheet path regardless of individual SOW pricing types.
-  // Fixed-price milestone invoices represent client billing events, not program-level spend.
-  const totalForecast  = data.sows.reduce((s, sow) => s + sowForecastCost(sow.id, data, true), 0)
-  const totalActual    = data.sows.reduce((s, sow) => s + sowActualCost(sow.id, data, true, true), 0)
+  // KPI matches the per-SOW cards: pricing-type-aware (milestone totals for fixed-price SOWs).
+  // The burndown chart is separately forced to allocation-based to keep its lines smooth — the
+  // chart represents internal spend forecast, KPI represents the client-facing commitment.
+  const totalForecast  = data.sows.reduce((s, sow) => s + sowForecastCost(sow.id, data), 0)
+  const totalActual    = data.sows.reduce((s, sow) => s + sowActualCost(sow.id, data), 0)
   const totalRemaining = totalBudget - totalActual
   const bufferPoolTotal = data.sows.reduce((s, sow) => s + sowBufferCostAmount(sow), 0)
   const bufferConsumed  = data.sows.reduce((s, sow) => {
-    const actual      = sowActualCost(sow.id, data, true, true)
+    const actual      = sowActualCost(sow.id, data)
     const deliverable = sowDeliverableBudget(sow)
     return s + Math.max(0, actual - deliverable)
   }, 0)
